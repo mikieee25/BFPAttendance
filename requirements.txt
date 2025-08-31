@@ -1,0 +1,42 @@
+# Web Framework
+Flask
+Flask-Login
+Flask-SQLAlchemy
+Flask-WTF
+Flask-Limiter
+Werkzeug
+
+# Database
+SQLAlchemy
+mysqlclient
+pymysql
+
+# Computer Vision & AI
+torch
+torchvision
+ultralytics
+opencv-python
+numpy
+Pillow
+
+# Data Processing & Visualization
+matplotlib
+pandas
+openpyxl
+
+# Utilities
+python-dotenv
+gunicorn
+requests
+python-dateutil
+tqdm
+colorama
+email_validator
+
+# Deployment
+waitress  
+
+# Development tools (optional)
+pytest
+black
+flake8

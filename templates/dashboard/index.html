@@ -1,0 +1,432 @@
+{% extends "base.html" %} {% block title %}Dashboard - BFP Sorsogon Attendance
+System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <h1 class="page-title">
+      <i class="fas fa-tachometer-alt me-2"></i>
+      Dashboard
+      <small class="text-muted">{{ current_user.station_name }}</small>
+    </h1>
+  </div>
+</div>
+
+<!-- Date and Time Widget -->
+<div class="row mb-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body text-center">
+        <h5 class="card-title">
+          <i class="fas fa-clock me-2"></i>Current Time
+        </h5>
+        <div class="clock-display" id="currentTime">
+          {{ current_time.strftime('%H:%M:%S') }}
+        </div>
+        <div class="date-display" id="currentDate">
+          {{ current_time.strftime('%A, %B %d, %Y') }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">
+          <i class="fas fa-calendar-day me-2"></i>Today's Summary
+        </h5>
+        <div class="row text-center">
+          <div class="col-4">
+            <h3 class="text-success mb-0" id="presentToday">
+              {{ present_today }}
+            </h3>
+            <small class="text-muted">Present</small>
+          </div>
+          <div class="col-4">
+            <h3 class="text-warning mb-0" id="lateToday">{{ late_today }}</h3>
+            <small class="text-muted">Late</small>
+          </div>
+          <div class="col-4">
+            <h3 class="text-danger mb-0" id="absentToday">
+              {{ absent_today }}
+            </h3>
+            <small class="text-muted">Absent</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card stats-card border-left-primary">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+            >
+              Total Personnel
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ total_personnel }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-users fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card stats-card border-left-success">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-success text-uppercase mb-1"
+            >
+              Present Today
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ present_today }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card stats-card border-left-warning">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-warning text-uppercase mb-1"
+            >
+              Late Today
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ late_today }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-clock fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card stats-card border-left-danger">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-danger text-uppercase mb-1"
+            >
+              Absent Today
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ absent_today }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-times-circle fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-line me-2"></i>Weekly Attendance Trend
+        </h6>
+      </div>
+      <div class="card-body">
+        <canvas id="weeklyChart" width="400" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-bar me-2"></i>Monthly Attendance Trend
+        </h6>
+      </div>
+      <div class="card-body">
+        <canvas id="monthlyChart" width="400" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Attendance Records -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div
+        class="card-header d-flex justify-content-between align-items-center"
+      >
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-list me-2"></i>Recent Attendance Records
+        </h6>
+        <a
+          href="{{ url_for('attendance.index') }}"
+          class="btn btn-sm btn-primary"
+        >
+          View All <i class="fas fa-arrow-right ms-1"></i>
+        </a>
+      </div>
+      <div class="card-body">
+        {% if recent_attendance %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Personnel</th>
+                <th>Date</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Status</th>
+                <th>Station</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in recent_attendance %}
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center">
+                    {% if record.personnel.image_path %}
+                    <img
+                      src="{{ url_for('static', filename=record.personnel.image_path) }}"
+                      alt="{{ record.personnel.full_name }}"
+                      class="rounded-circle me-2"
+                      width="32"
+                      height="32"
+                    />
+                    {% else %}
+                    <img
+                      src="{{ url_for('static', filename='images/profile-placeholder.jpg') }}"
+                      alt="{{ record.personnel.full_name }}"
+                      class="rounded-circle me-2"
+                      width="32"
+                      height="32"
+                    />
+                    {% endif %}
+                    <span>{{ record.personnel.name_with_rank }}</span>
+                  </div>
+                </td>
+                <td>{{ record.date|date }}</td>
+                <td>
+                  {% if record.time_in %}
+                  <span class="badge bg-success"
+                    >{{ record.time_in|time }}</span
+                  >
+                  {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if record.time_out %}
+                  <span class="badge bg-info">{{ record.time_out|time }}</span>
+                  {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if record.status %} {% if record.status.value == 'PRESENT'
+                  %}
+                  <span class="badge bg-success"
+                    >{{ record.status.value }}</span
+                  >
+                  {% elif record.status.value == 'LATE' %}
+                  <span class="badge bg-warning"
+                    >{{ record.status.value }}</span
+                  >
+                  {% else %}
+                  <span class="badge bg-danger">{{ record.status.value }}</span>
+                  {% endif %} {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>{{ record.personnel.station.station_name }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+          <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+          <p class="text-muted">No attendance records found</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-bolt me-2"></i>Quick Actions
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3 mb-2">
+            <a
+              href="{{ url_for('attendance.capture') }}"
+              class="btn btn-bfp w-100"
+            >
+              <i class="fas fa-camera me-2"></i>Capture Attendance
+            </a>
+          </div>
+          <div class="col-md-3 mb-2">
+            <a
+              href="{{ url_for('personnel.add') }}"
+              class="btn btn-outline-primary w-100"
+            >
+              <i class="fas fa-user-plus me-2"></i>Add Personnel
+            </a>
+          </div>
+          <div class="col-md-3 mb-2">
+            <a
+              href="{{ url_for('reports.attendance_summary') }}"
+              class="btn btn-outline-info w-100"
+            >
+              <i class="fas fa-chart-bar me-2"></i>View Reports
+            </a>
+          </div>
+          <div class="col-md-3 mb-2">
+            <a
+              href="{{ url_for('attendance.manual') }}"
+              class="btn btn-outline-secondary w-100"
+            >
+              <i class="fas fa-edit me-2"></i>Manual Entry
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  // Real-time clock update
+  function updateClock() {
+      fetch('{{ url_for("dashboard.get_current_time") }}')
+          .then(response => response.json())
+          .then(data => {
+              document.getElementById('currentTime').textContent = data.time;
+              document.getElementById('currentDate').textContent = data.date;
+          })
+          .catch(error => console.error('Error updating clock:', error));
+  }
+
+  // Update clock every second
+  setInterval(updateClock, 1000);
+
+  // Update stats every 30 seconds
+  function updateStats() {
+      fetch('{{ url_for("dashboard.get_stats") }}')
+          .then(response => response.json())
+          .then(data => {
+              document.getElementById('presentToday').textContent = data.present_today;
+              document.getElementById('lateToday').textContent = data.late_today;
+              document.getElementById('absentToday').textContent = data.absent_today;
+          })
+          .catch(error => console.error('Error updating stats:', error));
+  }
+
+  setInterval(updateStats, 30000);
+
+  // Weekly Chart
+  const weeklyData = {{ weekly_data | tojson }};
+  const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+  new Chart(weeklyCtx, {
+      type: 'line',
+      data: {
+          labels: weeklyData.map(d => d.date),
+          datasets: [{
+              label: 'Present',
+              data: weeklyData.map(d => d.count),
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              tension: 0.1
+          }]
+      },
+      options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+              legend: {
+                  display: false
+              }
+          },
+          scales: {
+              y: {
+                  beginAtZero: true,
+                  ticks: {
+                      stepSize: 1
+                  }
+              }
+          }
+      }
+  });
+
+  // Monthly Chart
+  const monthlyData = {{ monthly_data | tojson }};
+  const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+  new Chart(monthlyCtx, {
+      type: 'bar',
+      data: {
+          labels: monthlyData.map(d => d.month),
+          datasets: [{
+              label: 'Attendance',
+              data: monthlyData.map(d => d.count),
+              backgroundColor: 'rgba(220, 53, 69, 0.8)',
+              borderColor: 'rgba(220, 53, 69, 1)',
+              borderWidth: 1
+          }]
+      },
+      options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+              legend: {
+                  display: false
+              }
+          },
+          scales: {
+              y: {
+                  beginAtZero: true,
+                  ticks: {
+                      stepSize: 1
+                  }
+              }
+          }
+      }
+  });
+</script>
+{% endblock %}
