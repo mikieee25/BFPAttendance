@@ -1,0 +1,369 @@
+{% extends "base.html" %} {% block title %}Register Personnel - BFP Sorsogon
+Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-user-plus me-2"></i>Register New Personnel
+      </h1>
+      <a href="{{ url_for('auth.manage_users') }}" class="btn btn-secondary">
+        <i class="fas fa-users me-2"></i>Manage Users
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-user-plus me-2"></i>Personnel Information
+        </h6>
+      </div>
+      <div class="card-body">
+        <form id="registerForm" method="POST">
+          <!-- Personal Information -->
+          <div class="row">
+            <div class="col-12">
+              <h6 class="text-primary border-bottom pb-2 mb-3">
+                Personal Information
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="first_name" class="form-label"
+                  >First Name <span class="text-danger">*</span></label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="first_name"
+                  name="first_name"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="last_name" class="form-label"
+                  >Last Name <span class="text-danger">*</span></label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="last_name"
+                  name="last_name"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="middle_name" class="form-label">Middle Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="middle_name"
+                  name="middle_name"
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="suffix" class="form-label">Suffix</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="suffix"
+                  name="suffix"
+                  placeholder="Jr., Sr., III, etc."
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Professional Information -->
+          <div class="row">
+            <div class="col-12">
+              <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
+                Professional Information
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="rank" class="form-label"
+                  >Rank <span class="text-danger">*</span></label
+                >
+                <select class="form-select" id="rank" name="rank" required>
+                  <option value="">Select Rank</option>
+                  <option value="Fire Chief">Fire Chief</option>
+                  <option value="Asst. Fire Chief">Asst. Fire Chief</option>
+                  <option value="Fire Superintendent">
+                    Fire Superintendent
+                  </option>
+                  <option value="Fire Inspector">Fire Inspector</option>
+                  <option value="Senior Fire Officer">
+                    Senior Fire Officer
+                  </option>
+                  <option value="Fire Officer">Fire Officer</option>
+                  <option value="Senior Firefighter">Senior Firefighter</option>
+                  <option value="Firefighter">Firefighter</option>
+                  <option value="Probationary Firefighter">
+                    Probationary Firefighter
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="badge_number" class="form-label"
+                  >Badge Number <span class="text-danger">*</span></label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="badge_number"
+                  name="badge_number"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="station_id" class="form-label"
+                  >Station Assignment <span class="text-danger">*</span></label
+                >
+                <select
+                  class="form-select"
+                  id="station_id"
+                  name="station_id"
+                  required
+                >
+                  <option value="">Select Station</option>
+                  {% for station in stations %}
+                  <option value="{{ station.id }}">
+                    {{ station.station_name }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="hire_date" class="form-label"
+                  >Hire Date <span class="text-danger">*</span></label
+                >
+                <input
+                  type="date"
+                  class="form-control"
+                  id="hire_date"
+                  name="hire_date"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Contact Information -->
+          <div class="row">
+            <div class="col-12">
+              <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
+                Contact Information
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="email" class="form-label"
+                  >Email Address <span class="text-danger">*</span></label
+                >
+                <input
+                  type="email"
+                  class="form-control"
+                  id="email"
+                  name="email"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="phone" class="form-label">Phone Number</label>
+                <input
+                  type="tel"
+                  class="form-control"
+                  id="phone"
+                  name="phone"
+                  placeholder="+63 9XX XXX XXXX"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="address" class="form-label">Address</label>
+            <textarea
+              class="form-control"
+              id="address"
+              name="address"
+              rows="2"
+            ></textarea>
+          </div>
+
+          <!-- Additional Settings -->
+          <div class="row">
+            <div class="col-12">
+              <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
+                Additional Settings
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="status" class="form-label">Employment Status</label>
+                <select class="form-select" id="status" name="status">
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="ON_LEAVE">On Leave</option>
+                  <option value="SUSPENDED">Suspended</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_schedule" class="form-label"
+                  >Shift Schedule</label
+                >
+                <select
+                  class="form-select"
+                  id="shift_schedule"
+                  name="shift_schedule"
+                >
+                  <option value="DAY_SHIFT">
+                    Day Shift (8:00 AM - 5:00 PM)
+                  </option>
+                  <option value="NIGHT_SHIFT">
+                    Night Shift (5:00 PM - 8:00 AM)
+                  </option>
+                  <option value="ROTATING">Rotating Shift</option>
+                  <option value="ON_CALL">On Call</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea
+              class="form-control"
+              id="notes"
+              name="notes"
+              rows="3"
+              placeholder="Additional notes or comments..."
+            ></textarea>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="d-flex justify-content-between">
+            <a
+              href="{{ url_for('auth.manage_users') }}"
+              class="btn btn-secondary"
+            >
+              <i class="fas fa-arrow-left me-2"></i>Back to Users
+            </a>
+            <div>
+              <button type="reset" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-redo me-2"></i>Reset Form
+              </button>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-user-plus me-2"></i>Register Personnel
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  $(document).ready(function () {
+    // Set today as default hire date
+    $("#hire_date").val(new Date().toISOString().split("T")[0]);
+  });
+
+  // Form validation and submission
+  $("#registerForm").on("submit", function (e) {
+    e.preventDefault();
+
+    // Show loading state
+    const submitBtn = $('button[type="submit"]');
+    const originalText = submitBtn.html();
+    submitBtn
+      .html('<i class="fas fa-spinner fa-spin me-2"></i>Registering...')
+      .prop("disabled", true);
+
+    // Submit form
+    const formData = new FormData(this);
+
+    fetch("/auth/register", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          showAlert("success", "Personnel registered successfully");
+          setTimeout(() => {
+            window.location.href = "/auth/manage-users";
+          }, 2000);
+        } else {
+          showAlert("error", data.error || "Failed to register personnel");
+          submitBtn.html(originalText).prop("disabled", false);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred while registering personnel");
+        submitBtn.html(originalText).prop("disabled", false);
+      });
+  });
+
+  // Show alert function
+  function showAlert(type, message) {
+    const alertClass = type === "success" ? "alert-success" : "alert-danger";
+    const alertIcon =
+      type === "success" ? "check-circle" : "exclamation-triangle";
+
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${alertIcon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    $(".row").first().before(alertHtml);
+
+    setTimeout(() => {
+      $(".alert").alert("close");
+    }, 5000);
+  }
+</script>
+{% endblock %}

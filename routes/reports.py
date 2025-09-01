@@ -22,7 +22,48 @@ reports_bp = Blueprint("reports", __name__)
 @reports_bp.route("/")
 @login_required
 def index():
-    return render_template("reports/index.html")
+    # Get basic stats for the dashboard
+    today = datetime.now().date()
+    current_month_start = today.replace(day=1)
+
+    # Base queries based on user role
+    if current_user.is_admin:
+        personnel_query = Personnel.query
+        attendance_query = Attendance.query.join(Personnel)
+    else:
+        personnel_query = Personnel.query.filter_by(station_id=current_user.id)
+        attendance_query = Attendance.query.join(Personnel).filter(
+            Personnel.station_id == current_user.id
+        )
+
+    # Calculate stats
+    total_personnel = personnel_query.count()
+
+    # Today's attendance
+    today_attendance = attendance_query.filter(Attendance.date == today).count()
+    today_present = attendance_query.filter(
+        Attendance.date == today, Attendance.status == AttendanceStatus.PRESENT
+    ).count()
+    today_late = attendance_query.filter(
+        Attendance.date == today, Attendance.status == AttendanceStatus.LATE
+    ).count()
+    today_absent = total_personnel - (today_present + today_late)
+
+    # This month's stats
+    month_attendance = attendance_query.filter(
+        Attendance.date >= current_month_start
+    ).count()
+
+    stats = {
+        "total_personnel": total_personnel,
+        "today_attendance": today_attendance,
+        "today_present": today_present,
+        "today_late": today_late,
+        "today_absent": today_absent,
+        "month_attendance": month_attendance,
+    }
+
+    return render_template("reports/index.html", stats=stats)
 
 
 @reports_bp.route("/attendance-summary")

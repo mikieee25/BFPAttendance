@@ -30,7 +30,52 @@ def index():
         .all()
     )
 
-    # Get statistics
+    # Get recent attendance records for current user
+    recent_attendance = []
+    if hasattr(current_user, "personnel_id") and current_user.personnel_id:
+        recent_attendance = (
+            Attendance.query.filter_by(personnel_id=current_user.personnel_id)
+            .order_by(Attendance.date.desc())
+            .limit(5)
+            .all()
+        )
+
+    # Calculate attendance statistics for current user
+    current_month = datetime.now().replace(day=1)
+    next_month = (current_month + timedelta(days=32)).replace(day=1)
+
+    # Get this month's attendance records
+    this_month_attendance = []
+    if hasattr(current_user, "personnel_id") and current_user.personnel_id:
+        this_month_attendance = (
+            Attendance.query.filter_by(personnel_id=current_user.personnel_id)
+            .filter(
+                Attendance.date >= current_month.date(),
+                Attendance.date < next_month.date(),
+            )
+            .all()
+        )
+
+    # Calculate stats
+    total_days = len(this_month_attendance)
+    days_present = len([a for a in this_month_attendance if a.status.name == "PRESENT"])
+    days_late = len([a for a in this_month_attendance if a.status.name == "LATE"])
+    days_absent = len([a for a in this_month_attendance if a.status.name == "ABSENT"])
+
+    # Calculate attendance rate
+    working_days = (datetime.now().date() - current_month.date()).days + 1
+    this_month_rate = (
+        int((days_present / working_days * 100)) if working_days > 0 else 0
+    )
+
+    attendance_stats = {
+        "this_month_rate": this_month_rate,
+        "days_present": days_present,
+        "days_late": days_late,
+        "days_absent": days_absent,
+    }
+
+    # Get general statistics
     if current_user.is_admin:
         total_personnel = Personnel.query.count()
         total_users = User.query.count()
@@ -49,12 +94,18 @@ def index():
             .count()
         )
 
+    user_stats = {
+        "total_personnel": total_personnel,
+        "total_users": total_users,
+        "today_attendance": today_attendance,
+    }
+
     return render_template(
         "profile/index.html",
         recent_activities=recent_activities,
-        total_personnel=total_personnel,
-        total_users=total_users,
-        today_attendance=today_attendance,
+        user_stats=user_stats,
+        attendance_stats=attendance_stats,
+        recent_attendance=recent_attendance,
     )
 
 

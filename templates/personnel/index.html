@@ -23,7 +23,7 @@ Attendance System{% endblock %} {% block content %}
       </div>
       <div class="card-body">
         <div class="table-responsive">
-          <table class="table table-hover data-table" id="personnelTable">
+          <table class="table table-hover" id="personnelTable">
             <thead>
               <tr>
                 <th>Photo</th>
@@ -129,6 +129,17 @@ Attendance System{% endblock %} {% block content %}
       pageLength: 25,
       order: [[1, "asc"]],
       columnDefs: [{ orderable: false, targets: [0, 6] }],
+      language: {
+        search: "Search:",
+        lengthMenu: "Show _MENU_ entries",
+        info: "Showing _START_ to _END_ of _TOTAL_ entries",
+        paginate: {
+          first: "First",
+          last: "Last",
+          next: "Next",
+          previous: "Previous",
+        },
+      },
     });
   });
 </script>

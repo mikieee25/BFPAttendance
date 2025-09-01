@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
+from datetime import datetime
 from models import db, User, ActivityLog, StationType
 
 auth_bp = Blueprint("auth", __name__)
@@ -62,6 +63,14 @@ def register():
         flash("Access denied. Only administrators can create new accounts.", "error")
         return redirect(url_for("auth.login"))
 
+    # Station types for dropdown
+    station_types_list = [
+        {"id": "CENTRAL", "station_name": "Central Station"},
+        {"id": "TALISAY", "station_name": "Talisay Station"},
+        {"id": "BACON", "station_name": "Bacon Station"},
+        {"id": "ABUYOG", "station_name": "Abuyog Station"},
+    ]
+
     if request.method == "POST":
         username = request.form["username"]
         email = request.form["email"]
@@ -73,15 +82,30 @@ def register():
         # Validation
         if password != confirm_password:
             flash("Passwords do not match", "error")
-            return render_template("auth/register.html", station_types=StationType)
+            return render_template(
+                "auth/register.html",
+                station_types=StationType,
+                stations=station_types_list,
+                form=request.form,
+            )
 
         if User.query.filter_by(username=username).first():
             flash("Username already exists", "error")
-            return render_template("auth/register.html", station_types=StationType)
+            return render_template(
+                "auth/register.html",
+                station_types=StationType,
+                stations=station_types_list,
+                form=request.form,
+            )
 
         if User.query.filter_by(email=email).first():
             flash("Email already exists", "error")
-            return render_template("auth/register.html", station_types=StationType)
+            return render_template(
+                "auth/register.html",
+                station_types=StationType,
+                stations=station_types_list,
+                form=request.form,
+            )
 
         # Create new user
         new_user = User(
@@ -106,7 +130,20 @@ def register():
         flash("User registered successfully", "success")
         return redirect(url_for("auth.manage_users"))
 
-    return render_template("auth/register.html", station_types=StationType)
+    # Station types for dropdown
+    station_types_list = [
+        {"id": "CENTRAL", "station_name": "Central Station"},
+        {"id": "TALISAY", "station_name": "Talisay Station"},
+        {"id": "BACON", "station_name": "Bacon Station"},
+        {"id": "ABUYOG", "station_name": "Abuyog Station"},
+    ]
+
+    return render_template(
+        "auth/register.html",
+        station_types=StationType,
+        stations=station_types_list,
+        form={},
+    )
 
 
 @auth_bp.route("/manage-users")
@@ -116,7 +153,41 @@ def manage_users():
         return redirect(url_for("dashboard.index"))
 
     users = User.query.all()
-    return render_template("auth/manage_users.html", users=users)
+
+    # Get user stats
+    total_users = len(users)
+    admin_users = len([u for u in users if u.is_admin])
+    regular_users = total_users - admin_users
+
+    # Calculate active users (all users are considered active for now)
+    active_users = total_users
+
+    # Calculate new users this month
+    current_month = datetime.now().replace(day=1)
+    new_this_month = len([u for u in users if u.date_created >= current_month])
+
+    user_stats = {
+        "total_users": total_users,
+        "admin_users": admin_users,
+        "regular_users": regular_users,
+        "active_users": active_users,
+        "new_this_month": new_this_month,
+    }
+
+    # Get station types for filter dropdown
+    station_types = [
+        {"id": "CENTRAL", "name": "Central Station"},
+        {"id": "TALISAY", "name": "Talisay Station"},
+        {"id": "BACON", "name": "Bacon Station"},
+        {"id": "ABUYOG", "name": "Abuyog Station"},
+    ]
+
+    return render_template(
+        "auth/manage_users.html",
+        users=users,
+        user_stats=user_stats,
+        stations=station_types,
+    )
 
 
 @auth_bp.route("/delete-user/<int:user_id>", methods=["POST"])

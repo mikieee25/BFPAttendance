@@ -38,7 +38,36 @@ def index():
         .all()
     )
 
-    return render_template("pending/index.html", pending_requests=pending_requests)
+    # Calculate pending stats
+    total_pending = len(pending_requests)
+    today_pending = len(
+        [
+            req
+            for req in pending_requests
+            if req.date_created.date() == datetime.now().date()
+        ]
+    )
+
+    # Get recent activity
+    recent_approvals = (
+        Attendance.query.join(Personnel)
+        .filter(Attendance.approved_by.isnot(None))
+        .order_by(Attendance.date_created.desc())
+        .limit(5)
+        .all()
+    )
+
+    pending_stats = {
+        "total_pending": total_pending,
+        "today_pending": today_pending,
+        "recent_approvals": recent_approvals,
+    }
+
+    return render_template(
+        "pending/index.html",
+        pending_requests=pending_requests,
+        pending_stats=pending_stats,
+    )
 
 
 @pending_bp.route("/approve/<int:request_id>", methods=["POST"])

@@ -1,0 +1,467 @@
+{% extends "base.html" %} {% block title %}Profile - BFP Sorsogon Attendance
+System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title"><i class="fas fa-user me-2"></i>My Profile</h1>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Profile Information -->
+  <div class="col-lg-8">
+    <div class="card shadow mb-4">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-user-edit me-2"></i>Personal Information
+        </h6>
+      </div>
+      <div class="card-body">
+        <form id="profileForm" method="POST">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="first_name" class="form-label">First Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="first_name"
+                  name="first_name"
+                  value="{{ current_user.first_name }}"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="last_name" class="form-label">Last Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="last_name"
+                  name="last_name"
+                  value="{{ current_user.last_name }}"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="rank" class="form-label">Rank</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="rank"
+                  name="rank"
+                  value="{{ current_user.rank }}"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="badge_number" class="form-label"
+                  >Badge Number</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="badge_number"
+                  name="badge_number"
+                  value="{{ current_user.badge_number }}"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input
+                  type="email"
+                  class="form-control"
+                  id="email"
+                  name="email"
+                  value="{{ current_user.email }}"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="phone" class="form-label">Phone Number</label>
+                <input
+                  type="tel"
+                  class="form-control"
+                  id="phone"
+                  name="phone"
+                  value="{{ current_user.phone or '' }}"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="station" class="form-label">Station Assignment</label>
+            <input
+              type="text"
+              class="form-control"
+              id="station"
+              name="station"
+              value="{{ current_user.station.station_name if current_user.station else 'N/A' }}"
+              readonly
+            />
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="hire_date" class="form-label">Hire Date</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  id="hire_date"
+                  name="hire_date"
+                  value="{{ current_user.hire_date.strftime('%Y-%m-%d') if current_user.hire_date else '' }}"
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="status" class="form-label">Status</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="status"
+                  name="status"
+                  value="{{ current_user.status.name.replace('_', ' ').title() if current_user.status else 'Active' }}"
+                  readonly
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-2"></i>Update Profile
+            </button>
+            <button
+              type="button"
+              class="btn btn-warning"
+              data-bs-toggle="modal"
+              data-bs-target="#changePasswordModal"
+            >
+              <i class="fas fa-key me-2"></i>Change Password
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Picture & Quick Stats -->
+  <div class="col-lg-4">
+    <!-- Profile Picture -->
+    <div class="card shadow mb-4">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-camera me-2"></i>Profile Picture
+        </h6>
+      </div>
+      <div class="card-body text-center">
+        <div class="profile-image-container mb-3">
+          <img
+            src="{{ url_for('static', filename='images/profile-placeholder.jpg') }}"
+            alt="Profile Picture"
+            class="rounded-circle"
+            width="150"
+            height="150"
+            style="object-fit: cover; border: 4px solid #e3e6f0"
+          />
+        </div>
+        <button class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-upload me-2"></i>Upload New Picture
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="card shadow mb-4">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-bar me-2"></i>My Attendance Stats
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span class="text-sm">This Month's Attendance:</span>
+            <span class="font-weight-bold text-success"
+              >{{ attendance_stats.this_month_rate }}%</span
+            >
+          </div>
+          <div class="progress progress-sm mt-1">
+            <div
+              class="progress-bar bg-success"
+              style="width: {{ attendance_stats.this_month_rate }}%"
+            ></div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span class="text-sm">Days Present:</span>
+            <span class="font-weight-bold"
+              >{{ attendance_stats.days_present }}</span
+            >
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span class="text-sm">Days Late:</span>
+            <span class="font-weight-bold text-warning"
+              >{{ attendance_stats.days_late }}</span
+            >
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span class="text-sm">Days Absent:</span>
+            <span class="font-weight-bold text-danger"
+              >{{ attendance_stats.days_absent }}</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-history me-2"></i>Recent Activity
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if recent_attendance %}
+        <div class="timeline">
+          {% for record in recent_attendance %}
+          <div class="timeline-item mb-3">
+            <div class="d-flex">
+              <div
+                class="timeline-marker bg-{{ 'success' if record.status.name == 'PRESENT' else 'warning' if record.status.name == 'LATE' else 'danger' }}"
+              ></div>
+              <div class="timeline-content ms-3">
+                <div class="fw-bold">
+                  {{ record.date.strftime('%m/%d/%Y') }}
+                </div>
+                <div class="text-sm text-muted">
+                  {% if record.time_in %} In: {{
+                  record.time_in.strftime('%H:%M') }} {% endif %} {% if
+                  record.time_out %} | Out: {{ record.time_out.strftime('%H:%M')
+                  }} {% endif %}
+                </div>
+                <span
+                  class="badge bg-{{ 'success' if record.status.name == 'PRESENT' else 'warning' if record.status.name == 'LATE' else 'danger' }} badge-sm"
+                >
+                  {{ record.status.name.replace('_', ' ').title() }}
+                </span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted">
+          <i class="fas fa-clock fa-2x mb-2"></i>
+          <p>No recent attendance records</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div
+  class="modal fade"
+  id="changePasswordModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Change Password</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <form id="changePasswordForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="current_password" class="form-label"
+              >Current Password</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="current_password"
+              name="current_password"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="new_password" class="form-label">New Password</label>
+            <input
+              type="password"
+              class="form-control"
+              id="new_password"
+              name="new_password"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label"
+              >Confirm New Password</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="confirm_password"
+              name="confirm_password"
+              required
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
+          >
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">Change Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_css %}
+<style>
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-top: 6px;
+  }
+
+  .profile-image-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  .profile-image-container:hover::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+  }
+</style>
+{% endblock %} {% block extra_js %}
+<script>
+  // Profile form submission
+  $("#profileForm").on("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch("/profile/", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          showAlert("success", "Profile updated successfully");
+        } else {
+          showAlert("error", data.error || "Failed to update profile");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred while updating profile");
+      });
+  });
+
+  // Change password form submission
+  $("#changePasswordForm").on("submit", function (e) {
+    e.preventDefault();
+
+    const newPassword = $("#new_password").val();
+    const confirmPassword = $("#confirm_password").val();
+
+    if (newPassword !== confirmPassword) {
+      showAlert("error", "New passwords do not match");
+      return;
+    }
+
+    const formData = new FormData(this);
+
+    fetch("/profile/change-password", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          $("#changePasswordModal").modal("hide");
+          $("#changePasswordForm")[0].reset();
+          showAlert("success", "Password changed successfully");
+        } else {
+          showAlert("error", data.error || "Failed to change password");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred while changing password");
+      });
+  });
+
+  // Show alert function
+  function showAlert(type, message) {
+    const alertClass = type === "success" ? "alert-success" : "alert-danger";
+    const alertIcon =
+      type === "success" ? "check-circle" : "exclamation-triangle";
+
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${alertIcon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    $(".row").first().before(alertHtml);
+
+    setTimeout(() => {
+      $(".alert").alert("close");
+    }, 5000);
+  }
+</script>
+{% endblock %}

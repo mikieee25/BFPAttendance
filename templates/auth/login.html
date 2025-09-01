@@ -22,109 +22,21 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
       rel="stylesheet"
     />
+    <!-- Custom Login CSS -->
+    <link
+      href="{{ url_for('static', filename='css/login.css') }}"
+      rel="stylesheet"
+    />
 
     <style>
-      :root {
-        --bfp-red: #dc3545;
-        --bfp-gold: #ffd700;
-      }
-
+      /* Dynamic background image */
       body {
-        background: linear-gradient(135deg, var(--bfp-red), #c82333);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      }
-
-      .login-container {
-        background: white;
-        border-radius: 1rem;
-        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
-        overflow: hidden;
-        max-width: 400px;
-        width: 100%;
-      }
-
-      .login-header {
-        background: linear-gradient(135deg, var(--bfp-red), #c82333);
-        color: white;
-        padding: 2rem;
-        text-align: center;
-      }
-
-      .login-header img {
-        height: 80px;
-        margin-bottom: 1rem;
-      }
-
-      .login-body {
-        padding: 2rem;
-      }
-
-      .form-control {
-        border-radius: 0.5rem;
-        border: 2px solid #e9ecef;
-        padding: 0.75rem 1rem;
-        transition: all 0.3s ease;
-      }
-
-      .form-control:focus {
-        border-color: var(--bfp-red);
-        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-      }
-
-      .btn-login {
-        background: linear-gradient(135deg, var(--bfp-red), #c82333);
-        border: none;
-        border-radius: 0.5rem;
-        padding: 0.75rem 1.5rem;
-        color: white;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        width: 100%;
-      }
-
-      .btn-login:hover {
-        background: linear-gradient(135deg, #c82333, var(--bfp-red));
-        transform: translateY(-2px);
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        color: white;
-      }
-
-      .input-group-text {
-        background-color: transparent;
-        border-right: none;
-        border-radius: 0.5rem 0 0 0.5rem;
-        border: 2px solid #e9ecef;
-        border-right: none;
-      }
-
-      .input-group .form-control {
-        border-left: none;
-        border-radius: 0 0.5rem 0.5rem 0;
-      }
-
-      .input-group:focus-within .input-group-text {
-        border-color: var(--bfp-red);
-      }
-
-      .alert {
-        border-radius: 0.5rem;
-        border: none;
-      }
-
-      .form-check-input:checked {
-        background-color: var(--bfp-red);
-        border-color: var(--bfp-red);
-      }
-
-      .footer-text {
-        text-align: center;
-        margin-top: 1rem;
-        color: #6c757d;
-        font-size: 0.875rem;
+        background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(220, 53, 69, 0.7)),
+          url('{{ url_for("static", filename="images/fire-station.jpg") }}');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        backdrop-filter: blur(2px);
       }
     </style>
   </head>

@@ -1,0 +1,388 @@
+{% extends "base.html" %} {% block title %}Pending Approvals - BFP Sorsogon
+Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-clock me-2"></i>Pending Approvals
+      </h1>
+      <a href="{{ url_for('pending.submit') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Submit Request
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Statistics Overview -->
+<div class="row mb-4">
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-warning shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-warning text-uppercase mb-1"
+            >
+              Total Pending
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ pending_stats.total_pending }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-clock fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-info shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+              Today's Pending
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ pending_stats.today_pending }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-calendar-day fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-success text-uppercase mb-1"
+            >
+              Recent Approvals
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ pending_stats.recent_approvals|length }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pending Requests Table -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-list me-2"></i>Pending Attendance Requests
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if pending_requests %}
+        <div class="table-responsive">
+          <table
+            class="table table-bordered"
+            id="pendingTable"
+            width="100%"
+            cellspacing="0"
+          >
+            <thead>
+              <tr>
+                <th>Personnel</th>
+                <th>Station</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Notes</th>
+                <th>Submitted</th>
+                <th>Image</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for request in pending_requests %}
+              <tr>
+                <td>{{ request.personnel.name_with_rank }}</td>
+                <td>{{ request.personnel.station.station_name }}</td>
+                <td>{{ request.date.strftime('%Y-%m-%d') }}</td>
+                <td>
+                  <span
+                    class="badge bg-{{ 'primary' if request.attendance_type == 'TIME_IN' else 'secondary' }}"
+                  >
+                    {{ request.attendance_type.replace('_', ' ').title() }}
+                  </span>
+                </td>
+                <td>{{ request.notes or '-' }}</td>
+                <td>{{ request.date_created.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                  {% if request.image_path %}
+                  <img
+                    src="{{ url_for('static', filename=request.image_path) }}"
+                    alt="Attendance Image"
+                    style="max-width: 60px; max-height: 60px; cursor: pointer"
+                    onclick="showImageModal('{{ url_for('static', filename=request.image_path) }}')"
+                  />
+                  {% else %}
+                  <span class="text-muted">No image</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <button
+                    class="btn btn-sm btn-success me-1"
+                    onclick="approveRequest({{ request.id }})"
+                  >
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button
+                    class="btn btn-sm btn-danger"
+                    onclick="rejectRequest({{ request.id }})"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+          <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+          <h5 class="text-muted">No Pending Requests</h5>
+          <p class="text-muted">All attendance requests have been processed.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Approvals -->
+{% if pending_stats.recent_approvals %}
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-history me-2"></i>Recent Approvals
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Personnel</th>
+                <th>Date</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for approval in pending_stats.recent_approvals %}
+              <tr>
+                <td>{{ approval.personnel.name_with_rank }}</td>
+                <td>{{ approval.date.strftime('%Y-%m-%d') }}</td>
+                <td>
+                  {{ approval.time_in.strftime('%H:%M') if approval.time_in else
+                  '-' }}
+                </td>
+                <td>
+                  {{ approval.time_out.strftime('%H:%M') if approval.time_out
+                  else '-' }}
+                </td>
+                <td>
+                  <span class="badge bg-success"
+                    >{{ approval.status.name.replace('_', ' ').title() }}</span
+                  >
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Attendance Image</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="modalImage" src="" alt="Attendance Image" class="img-fluid" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Reason Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Reject Request</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="rejectForm">
+          <div class="mb-3">
+            <label for="rejectReason" class="form-label"
+              >Reason for rejection:</label
+            >
+            <textarea
+              class="form-control"
+              id="rejectReason"
+              rows="3"
+              required
+            ></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" onclick="confirmReject()">
+          Reject Request
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  let currentRequestId = null;
+
+  // Initialize DataTable
+  $(document).ready(function () {
+    if ($("#pendingTable").length) {
+      $("#pendingTable").DataTable({
+        responsive: true,
+        order: [[5, "desc"]], // Sort by submitted date
+        pageLength: 25,
+        language: {
+          emptyTable: "No pending requests found",
+        },
+      });
+    }
+  });
+
+  // Show image modal
+  function showImageModal(imageSrc) {
+    $("#modalImage").attr("src", imageSrc);
+    $("#imageModal").modal("show");
+  }
+
+  // Approve request
+  function approveRequest(requestId) {
+    if (confirm("Are you sure you want to approve this attendance request?")) {
+      fetch(`/pending/approve/${requestId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            showAlert("success", data.message);
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            showAlert("error", data.error);
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          showAlert("error", "An error occurred while approving the request");
+        });
+    }
+  }
+
+  // Reject request
+  function rejectRequest(requestId) {
+    currentRequestId = requestId;
+    $("#rejectModal").modal("show");
+  }
+
+  function confirmReject() {
+    const reason = $("#rejectReason").val().trim();
+    if (!reason) {
+      showAlert("error", "Please provide a reason for rejection");
+      return;
+    }
+
+    fetch(`/pending/reject/${currentRequestId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason: reason }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          $("#rejectModal").modal("hide");
+          showAlert("success", data.message);
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showAlert("error", data.error);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred while rejecting the request");
+      });
+  }
+
+  // Show alert function
+  function showAlert(type, message) {
+    const alertClass = type === "success" ? "alert-success" : "alert-danger";
+    const alertIcon =
+      type === "success" ? "check-circle" : "exclamation-triangle";
+
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${alertIcon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    // Insert alert at the top of the content
+    $(".row").first().before(alertHtml);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      $(".alert").alert("close");
+    }, 5000);
+  }
+</script>
+{% endblock %}
