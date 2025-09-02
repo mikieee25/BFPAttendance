@@ -14,7 +14,7 @@ System{% endblock %} {% block content %}
 <div class="row mb-4">
   <div class="col-lg-6">
     <div class="card">
-      <div class="card-body text-center">
+      <div class="card-body text-center" id="currentTimeContainer">
         <h5 class="card-title">
           <i class="fas fa-clock me-2"></i>Current Time
         </h5>
@@ -30,22 +30,22 @@ System{% endblock %} {% block content %}
 
   <div class="col-lg-6">
     <div class="card">
-      <div class="card-body">
+      <div class="card-body" id="todaysSummary">
         <h5 class="card-title">
           <i class="fas fa-calendar-day me-2"></i>Today's Summary
         </h5>
         <div class="row text-center">
-          <div class="col-4">
+          <div class="col-4" id="countContainer">
             <h3 class="text-success mb-0" id="presentToday">
               {{ present_today }}
             </h3>
             <small class="text-muted">Present</small>
           </div>
-          <div class="col-4">
+          <div class="col-4" id="countContainer">
             <h3 class="text-warning mb-0" id="lateToday">{{ late_today }}</h3>
             <small class="text-muted">Late</small>
           </div>
-          <div class="col-4">
+          <div class="col-4" id="countContainer">
             <h3 class="text-danger mb-0" id="absentToday">
               {{ absent_today }}
             </h3>

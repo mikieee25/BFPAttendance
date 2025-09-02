@@ -189,10 +189,8 @@ Attendance System{% endblock %} {% block content %}
                 <th>Photo</th>
                 <th>Username</th>
                 <th>Station</th>
-                <th>-</th>
                 <th>Station Type</th>
                 <th>Email</th>
-                <th>-</th>
                 <th>Status</th>
                 <th>Role</th>
                 <th>Created Date</th>
@@ -217,10 +215,8 @@ Attendance System{% endblock %} {% block content %}
                   <div class="text-sm text-muted">{{ user.email }}</div>
                 </td>
                 <td>{{ user.station_name }}</td>
-                <td>-</td>
-                <td>{{ user.station_name }}</td>
+                <td>{{ user.station_type.value }}</td>
                 <td>{{ user.email }}</td>
-                <td>-</td>
                 <td>
                   <span class="badge bg-success">Active</span>
                 </td>
@@ -343,8 +339,8 @@ Attendance System{% endblock %} {% block content %}
       order: [[1, "asc"]], // Sort by name
       pageLength: 25,
       columnDefs: [
-        { orderable: false, targets: [0, 10] }, // Disable sorting for photo and actions columns
-        { searchable: false, targets: [0, 10] },
+        { orderable: false, targets: [0, 8] }, // Disable sorting for photo and actions columns
+        { searchable: false, targets: [0, 8] },
       ],
     });
 

@@ -1,0 +1,367 @@
+{% extends "base.html" %} {% block title %}Admin Tools - BFP Sorsogon Attendance
+System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-cogs me-2"></i>Administrator Tools
+      </h1>
+      <a href="{{ url_for('profile.index') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Profile
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- System Statistics -->
+<div class="row mb-4">
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-primary shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+            >
+              Total Users
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ total_users }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-users fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-success text-uppercase mb-1"
+            >
+              Total Personnel
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ total_personnel }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-user-friends fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-md-6 mb-4">
+    <div class="card border-left-info shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+              Total Attendance Records
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ total_attendance }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-clipboard-check fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Actions -->
+<div class="row">
+  <div class="col-lg-6 mb-4">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-tools me-2"></i>System Management
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary">
+            <i class="fas fa-users me-2"></i>Manage Users
+          </a>
+          <a href="{{ url_for('auth.register') }}" class="btn btn-success">
+            <i class="fas fa-user-plus me-2"></i>Register New Personnel
+          </a>
+          <a href="{{ url_for('pending.index') }}" class="btn btn-warning">
+            <i class="fas fa-clock me-2"></i>Pending Approvals
+          </a>
+          <a href="{{ url_for('reports.index') }}" class="btn btn-info">
+            <i class="fas fa-chart-bar me-2"></i>Generate Reports
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-database me-2"></i>Data Management
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <button class="btn btn-success" onclick="performBackup()">
+            <i class="fas fa-download me-2"></i>System Backup
+          </button>
+          <button class="btn btn-warning" onclick="showResetModal()">
+            <i class="fas fa-refresh me-2"></i>Reset Attendance Data
+          </button>
+          <a href="{{ url_for('profile.activity_logs') }}" class="btn btn-info">
+            <i class="fas fa-history me-2"></i>View Activity Logs
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-history me-2"></i>Recent System Activity
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if recent_activities %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for activity in recent_activities[:10] %}
+              <tr>
+                <td>{{ activity.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                <td>
+                  {{ activity.user.username if activity.user else 'System' }}
+                </td>
+                <td>{{ activity.title }}</td>
+                <td>{{ activity.description }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted">
+          <i class="fas fa-inbox fa-3x mb-3"></i>
+          <p>No recent system activity</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Attendance Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Reset Attendance Data</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Warning!</strong> This action cannot be undone.
+        </div>
+        <form id="resetForm">
+          <div class="mb-3">
+            <label class="form-label">Reset Type:</label>
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="resetType"
+                id="resetAll"
+                value="all"
+              />
+              <label class="form-check-label" for="resetAll">
+                Reset all attendance records
+              </label>
+            </div>
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="resetType"
+                id="resetRange"
+                value="date_range"
+              />
+              <label class="form-check-label" for="resetRange">
+                Reset by date range
+              </label>
+            </div>
+          </div>
+          <div id="dateRangeInputs" style="display: none">
+            <div class="row">
+              <div class="col-6">
+                <label for="startDate" class="form-label">Start Date:</label>
+                <input type="date" class="form-control" id="startDate" />
+              </div>
+              <div class="col-6">
+                <label for="endDate" class="form-label">End Date:</label>
+                <input type="date" class="form-control" id="endDate" />
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" onclick="confirmReset()">
+          Reset Data
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  // Show/hide date range inputs
+  $('input[name="resetType"]').on("change", function () {
+    if ($(this).val() === "date_range") {
+      $("#dateRangeInputs").show();
+    } else {
+      $("#dateRangeInputs").hide();
+    }
+  });
+
+  // Show reset modal
+  function showResetModal() {
+    $("#resetModal").modal("show");
+  }
+
+  // Perform system backup
+  function performBackup() {
+    if (confirm("Are you sure you want to create a system backup?")) {
+      fetch("/profile/system-backup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            showAlert("success", data.message);
+          } else {
+            showAlert("error", data.error);
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          showAlert("error", "An error occurred during backup");
+        });
+    }
+  }
+
+  // Confirm reset
+  function confirmReset() {
+    const resetType = $('input[name="resetType"]:checked').val();
+
+    if (!resetType) {
+      showAlert("error", "Please select a reset type");
+      return;
+    }
+
+    let resetData = { type: resetType };
+
+    if (resetType === "date_range") {
+      const startDate = $("#startDate").val();
+      const endDate = $("#endDate").val();
+
+      if (!startDate || !endDate) {
+        showAlert("error", "Please select both start and end dates");
+        return;
+      }
+
+      resetData.date_range = {
+        start: startDate,
+        end: endDate,
+      };
+    }
+
+    if (
+      confirm(
+        "Are you absolutely sure you want to reset attendance data? This cannot be undone!"
+      )
+    ) {
+      fetch("/profile/reset-attendance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(resetData),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            $("#resetModal").modal("hide");
+            showAlert("success", data.message);
+            setTimeout(() => location.reload(), 2000);
+          } else {
+            showAlert("error", data.error);
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          showAlert("error", "An error occurred during reset");
+        });
+    }
+  }
+
+  // Show alert function
+  function showAlert(type, message) {
+    const alertClass = type === "success" ? "alert-success" : "alert-danger";
+    const alertIcon =
+      type === "success" ? "check-circle" : "exclamation-triangle";
+
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${alertIcon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    $(".row").first().before(alertHtml);
+
+    setTimeout(() => {
+      $(".alert").alert("close");
+    }, 5000);
+  }
+</script>
+{% endblock %}

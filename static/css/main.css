@@ -525,3 +525,16 @@
   color: #ff9f40;
   text-decoration: underline;
 }
+
+#todaysSummary,
+#currentTimeContainer {
+  height: 200px;
+}
+
+#countContainer {
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
