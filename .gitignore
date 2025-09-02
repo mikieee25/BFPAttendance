@@ -1,0 +1,118 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Dependency directories
+jspm_packages/
+bower_components/
+
+# Build directories
+dist/
+build/
+out/
+target/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+*.iml
+.project
+.classpath
+.settings/
+.history/
+*.code-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.bak
+*.tmp
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+jest-report/
+test-report/
+
+# Temporary files
+*.tmp
+*.temp
+*.pid
+*.seed
+*.pid.lock
+tmp/
+temp/
+
+# Package managers
+.pnpm-debug.log*
+yarn.lock
+package-lock.json
+.npm/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+
+# CI/CD
+.ci/
+*.log
+*.cache
+.vercel
+.netlify
+.firebase/
+
+# Compiled output
+*.compiled
+*.min.*
+*.bundle.*
+
+# Mobile development
+.gradle/
+local.properties
+*.apk
+*.aab
+*.ipa
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Miscellaneous
+*.orig
+*.rej
+*.patch
+*.diff
+.sass-cache/
+.eslintcache
+.stylelintcache
+.cache/
+.parcel-cache/
