@@ -333,18 +333,38 @@ System{% endblock %} {% block content %}
 </div>
 {% endblock %} {% block extra_js %}
 <script>
-  // Real-time clock update
+  // Real-time clock update (client-side)
   function updateClock() {
-      fetch('{{ url_for("dashboard.get_current_time") }}')
-          .then(response => response.json())
-          .then(data => {
-              document.getElementById('currentTime').textContent = data.time;
-              document.getElementById('currentDate').textContent = data.date;
-          })
-          .catch(error => console.error('Error updating clock:', error));
+      const now = new Date();
+
+      // Format time
+      const timeOptions = {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+      };
+      const time = now.toLocaleTimeString('en-US', timeOptions);
+
+      // Format date
+      const dateOptions = {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+      };
+      const date = now.toLocaleDateString('en-US', dateOptions);
+
+      // Update DOM elements
+      const timeElement = document.getElementById('currentTime');
+      const dateElement = document.getElementById('currentDate');
+
+      if (timeElement) timeElement.textContent = time;
+      if (dateElement) dateElement.textContent = date;
   }
 
-  // Update clock every second
+  // Update clock immediately and then every second
+  updateClock();
   setInterval(updateClock, 1000);
 
   // Update stats every 30 seconds

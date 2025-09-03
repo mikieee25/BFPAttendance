@@ -89,13 +89,16 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
-    # Rate limiting
+    # Rate limiting - More generous limits for dashboard application
     limiter = Limiter(
         key_func=get_remote_address,
         app=app,
-        default_limits=["200 per day", "50 per hour"],
+        default_limits=["1000 per day", "200 per hour"],
         storage_uri="memory://",
     )
+
+    # Make limiter available to blueprints
+    app.limiter = limiter
 
     # Register blueprints
     from routes.auth import auth_bp

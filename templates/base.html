@@ -29,6 +29,14 @@
       href="{{ url_for('static', filename='favicon/favicon-16x16.png') }}"
     />
 
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <!-- Bootstrap CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
@@ -58,82 +66,138 @@
 
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
-      <div class="p-3">
-        <div class="text-center mb-4">
-          <img
-            src="{{ url_for('static', filename='images/bfp-logo.png') }}"
-            alt="BFP Logo"
-            style="height: 60px"
-          />
-          <h5 class="mt-2">BFP Sorsogon</h5>
-          <small>Attendance System</small>
+      <div class="sidebar-content">
+        <!-- Header section -->
+        <div class="sidebar-header-section">
+          <!-- Collapsed logo (shown when sidebar is collapsed) -->
+          <div class="sidebar-collapsed-logo">
+            <img
+              src="{{ url_for('static', filename='images/bfp-logo.png') }}"
+              alt="BFP Logo"
+              class="collapsed-logo-img"
+            />
+          </div>
+
+          <!-- Full header (shown when sidebar is expanded) -->
+          <div class="sidebar-header">
+            <img
+              src="{{ url_for('static', filename='images/bfp-logo.png') }}"
+              alt="BFP Logo"
+              class="sidebar-logo"
+              style="height: 60px"
+            />
+            <h5 class="mt-2 sidebar-title">BFP Sorsogon</h5>
+            <small class="sidebar-subtitle">Attendance System</small>
+          </div>
         </div>
 
-        <ul class="nav flex-column">
-          <li class="nav-item">
-            <a
-              class="nav-link {{ 'active' if request.endpoint and 'dashboard' in request.endpoint else '' }}"
-              href="{{ url_for('dashboard.index') }}"
-            >
-              <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link {{ 'active' if request.endpoint and 'personnel' in request.endpoint else '' }}"
-              href="{{ url_for('personnel.index') }}"
-            >
-              <i class="fas fa-users me-2"></i> Personnel
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link {{ 'active' if request.endpoint and 'attendance' in request.endpoint else '' }}"
-              href="{{ url_for('attendance.index') }}"
-            >
-              <i class="fas fa-calendar-check me-2"></i> Attendance
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link {{ 'active' if request.endpoint and 'reports' in request.endpoint else '' }}"
-              href="{{ url_for('reports.index') }}"
-            >
-              <i class="fas fa-chart-bar me-2"></i> Reports
-            </a>
-          </li>
-          {% if current_user.is_admin %}
-          <li class="nav-item">
-            <a
-              class="nav-link {{ 'active' if request.endpoint and 'pending' in request.endpoint else '' }}"
-              href="{{ url_for('pending.index') }}"
-            >
-              <i class="fas fa-clock me-2"></i> Pending Approval
-            </a>
-          </li>
-          {% endif %}
+        <!-- Navigation section -->
+        <div class="sidebar-nav-section">
+          <ul class="nav flex-column">
+            <li class="nav-item">
+              <a
+                class="nav-link {{ 'active' if request.endpoint and 'dashboard' in request.endpoint else '' }}"
+                href="{{ url_for('dashboard.index') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Dashboard"
+              >
+                <i class="fas fa-tachometer-alt nav-icon"></i>
+                <span class="nav-text">Dashboard</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {{ 'active' if request.endpoint and 'personnel' in request.endpoint else '' }}"
+                href="{{ url_for('personnel.index') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Personnel"
+              >
+                <i class="fas fa-users nav-icon"></i>
+                <span class="nav-text">Personnel</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {{ 'active' if request.endpoint and 'attendance' in request.endpoint else '' }}"
+                href="{{ url_for('attendance.index') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Attendance"
+              >
+                <i class="fas fa-calendar-check nav-icon"></i>
+                <span class="nav-text">Attendance</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {{ 'active' if request.endpoint and 'reports' in request.endpoint else '' }}"
+                href="{{ url_for('reports.index') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Reports"
+              >
+                <i class="fas fa-chart-bar nav-icon"></i>
+                <span class="nav-text">Reports</span>
+              </a>
+            </li>
+            {% if current_user.is_admin %}
+            <li class="nav-item">
+              <a
+                class="nav-link {{ 'active' if request.endpoint and 'pending' in request.endpoint else '' }}"
+                href="{{ url_for('pending.index') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Pending Approval"
+              >
+                <i class="fas fa-clock nav-icon"></i>
+                <span class="nav-text">Pending Approval</span>
+              </a>
+            </li>
+            {% endif %}
 
-          <hr class="my-3" />
+            <hr class="sidebar-divider" />
 
-          {% if current_user.is_admin %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('auth.manage_users') }}">
-              <i class="fas fa-users-cog me-2"></i> Manage Users
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('auth.register') }}">
-              <i class="fas fa-user-plus me-2"></i> Add User
-            </a>
-          </li>
-          {% endif %}
+            {% if current_user.is_admin %}
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{{ url_for('auth.manage_users') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Manage Users"
+              >
+                <i class="fas fa-users-cog nav-icon"></i>
+                <span class="nav-text">Manage Users</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{{ url_for('auth.register') }}"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="Add User"
+              >
+                <i class="fas fa-user-plus nav-icon"></i>
+                <span class="nav-text">Add User</span>
+              </a>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
 
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('auth.logout') }}">
-              <i class="fas fa-sign-out-alt me-2"></i> Logout
-            </a>
-          </li>
-        </ul>
+        <!-- Bottom section with collapse button -->
+        <div class="sidebar-bottom-section">
+          <button
+            class="sidebar-collapse-btn"
+            id="sidebarCollapseBtn"
+            title="Collapse Sidebar"
+          >
+            <i class="fas fa-angle-left fa-lg"></i>
+          </button>
+        </div>
       </div>
     </nav>
 
@@ -150,14 +214,6 @@
           >
             <span class="navbar-toggler-icon"></span>
           </button>
-
-          <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
-            <img
-              src="{{ url_for('static', filename='images/bfp-logo.png') }}"
-              alt="BFP Logo"
-            />
-            BFP Attendance System
-          </a>
 
           <div class="navbar-nav ms-auto">
             <div class="nav-item dropdown">
@@ -270,6 +326,119 @@
 
         sidebar.classList.remove("show");
         overlay.classList.remove("show");
+      });
+
+      // Sidebar collapse functionality (desktop only)
+      document.addEventListener("DOMContentLoaded", function () {
+        const sidebar = document.getElementById("sidebar");
+        const mainContent = document.querySelector(".main-content");
+        const collapseBtn = document.getElementById("sidebarCollapseBtn");
+
+        // Load saved state
+        const isCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
+        if (isCollapsed && window.innerWidth > 768) {
+          toggleSidebar(true);
+        }
+
+        function toggleSidebar(collapsed = null) {
+          if (window.innerWidth <= 768) return; // Don't collapse on mobile
+
+          const shouldCollapse =
+            collapsed !== null
+              ? collapsed
+              : !sidebar.classList.contains("collapsed");
+
+          if (shouldCollapse) {
+            sidebar.classList.add("collapsed");
+            if (mainContent) mainContent.classList.add("sidebar-collapsed");
+            localStorage.setItem("sidebarCollapsed", "true");
+          } else {
+            sidebar.classList.remove("collapsed");
+            if (mainContent) mainContent.classList.remove("sidebar-collapsed");
+            localStorage.setItem("sidebarCollapsed", "false");
+          }
+
+          // Initialize tooltips for collapsed state
+          if (shouldCollapse) {
+            setTimeout(() => {
+              var tooltipTriggerList = [].slice.call(
+                document.querySelectorAll(
+                  '.sidebar .nav-link[data-bs-toggle="tooltip"]'
+                )
+              );
+              tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                if (!tooltipTriggerEl._tooltip) {
+                  tooltipTriggerEl._tooltip = new bootstrap.Tooltip(
+                    tooltipTriggerEl
+                  );
+                }
+              });
+            }, 300);
+          } else {
+            // Dispose tooltips when expanded
+            var tooltipTriggerList = [].slice.call(
+              document.querySelectorAll(
+                '.sidebar .nav-link[data-bs-toggle="tooltip"]'
+              )
+            );
+            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+              if (tooltipTriggerEl._tooltip) {
+                tooltipTriggerEl._tooltip.dispose();
+                tooltipTriggerEl._tooltip = null;
+              }
+            });
+          }
+        }
+
+        // Event listener for collapse button
+        if (collapseBtn) {
+          collapseBtn.addEventListener("click", () => toggleSidebar());
+        }
+
+        // Handle window resize
+        window.addEventListener("resize", function () {
+          if (window.innerWidth <= 768) {
+            sidebar.classList.remove("show", "collapsed");
+            if (mainContent) mainContent.classList.remove("sidebar-collapsed");
+          } else {
+            // Restore collapse state on desktop
+            const isCollapsed =
+              localStorage.getItem("sidebarCollapsed") === "true";
+            if (isCollapsed) {
+              sidebar.classList.add("collapsed");
+              if (mainContent) mainContent.classList.add("sidebar-collapsed");
+            }
+          }
+        });
+      });
+
+      // Clock functionality
+      document.addEventListener("DOMContentLoaded", function () {
+        function updateClock() {
+          const now = new Date();
+          const options = {
+            timeZone: "Asia/Manila",
+            hour12: true,
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          };
+
+          const formatter = new Intl.DateTimeFormat("en-US", options);
+          const timeString = formatter.format(now);
+
+          const clockElement = document.getElementById("clock");
+          if (clockElement) {
+            clockElement.textContent = timeString;
+          }
+        }
+
+        // Update clock every second
+        updateClock();
+        setInterval(updateClock, 1000);
       });
 
       // Auto-dismiss alerts after 5 seconds

@@ -374,7 +374,7 @@ def api_data():
                     <i class="fas fa-edit"></i> Edit
                 </a>
                 <form method="POST" action="{url_for('attendance.delete', attendance_id=record.id)}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this attendance record?')">
-                    <button type="submit" class="btn btn-sm btn-danger">
+                    <button type="submit" class="btn btn-sm btn-danger btn-delete-custom">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </form>

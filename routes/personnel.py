@@ -246,11 +246,11 @@ def api_data():
                 <a href="{url_for('personnel.edit', personnel_id=p.id)}" class="btn btn-sm btn-warning">
                     <i class="fas fa-edit"></i> Edit
                 </a>
-                <a href="{url_for('personnel.register_face_page', personnel_id=p.id)}" class="btn btn-sm btn-primary">
+                <a href="{url_for('personnel.register_face_page', personnel_id=p.id)}" class="btn btn-sm btn-camera">
                     <i class="fas fa-camera"></i> Face
                 </a>
                 <form method="POST" action="{url_for('personnel.delete', personnel_id=p.id)}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this personnel?')">
-                    <button type="submit" class="btn btn-sm btn-danger">
+                    <button type="submit" class="btn btn-sm btn-danger btn-delete-custom">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </form>

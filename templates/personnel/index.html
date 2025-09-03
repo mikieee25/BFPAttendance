@@ -85,7 +85,7 @@ Attendance System{% endblock %} {% block content %}
                     </a>
                     <a
                       href="{{ url_for('personnel.register_face_page', personnel_id=person.id) }}"
-                      class="btn btn-sm btn-primary"
+                      class="btn btn-sm btn-camera"
                     >
                       <i class="fas fa-camera"></i>
                     </a>
@@ -95,7 +95,10 @@ Attendance System{% endblock %} {% block content %}
                       style="display: inline-block"
                       onsubmit="return confirm('Are you sure you want to delete this personnel?')"
                     >
-                      <button type="submit" class="btn btn-sm btn-danger">
+                      <button
+                        type="submit"
+                        class="btn btn-sm btn-danger btn-delete-custom"
+                      >
                         <i class="fas fa-trash"></i>
                       </button>
                     </form>

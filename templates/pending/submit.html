@@ -1,0 +1,450 @@
+{% extends "base.html" %} {% block title %}Submit Attendance Request - BFP
+Sorsogon Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-paper-plane me-2"></i>Submit Attendance Request
+      </h1>
+      <div>
+        <a href="{{ url_for('pending.index') }}" class="btn btn-secondary me-2">
+          <i class="fas fa-list me-2"></i>View Pending
+        </a>
+        <a
+          href="{{ url_for('attendance.index') }}"
+          class="btn btn-outline-primary"
+        >
+          <i class="fas fa-clock me-2"></i>Attendance Log
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Instructions Card -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="alert alert-info" role="alert">
+      <div class="d-flex align-items-center">
+        <i class="fas fa-info-circle fa-2x me-3"></i>
+        <div>
+          <h6 class="alert-heading mb-1">Manual Attendance Submission</h6>
+          <p class="mb-0">
+            Use this form to manually submit attendance requests that require
+            administrator approval. Take a clear photo as proof of attendance
+            and provide any necessary notes.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Submission Form -->
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-camera me-2"></i>Attendance Request Form
+        </h6>
+      </div>
+      <div class="card-body">
+        <form id="attendanceRequestForm">
+          <!-- Personnel Selection -->
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <label for="personnel_id" class="form-label">
+                Select Personnel <span class="text-danger">*</span>
+              </label>
+              <select
+                class="form-select"
+                id="personnel_id"
+                name="personnel_id"
+                required
+              >
+                <option value="">Choose personnel...</option>
+                {% for person in personnel_list %}
+                <option value="{{ person.id }}">
+                  {{ person.rank }} {{ person.full_name }} - {{
+                  person.station.station_name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="attendance_type" class="form-label">
+                Attendance Type <span class="text-danger">*</span>
+              </label>
+              <select
+                class="form-select"
+                id="attendance_type"
+                name="attendance_type"
+                required
+              >
+                <option value="">Select type...</option>
+                <option value="TIME_IN">Time In</option>
+                <option value="TIME_OUT">Time Out</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Camera Section -->
+          <div class="row mb-4">
+            <div class="col-12">
+              <label class="form-label">
+                Attendance Photo <span class="text-danger">*</span>
+              </label>
+              <div class="card">
+                <div class="card-body text-center">
+                  <!-- Camera View -->
+                  <div id="cameraSection" class="mb-3">
+                    <video
+                      id="video"
+                      autoplay
+                      muted
+                      style="
+                        width: 100%;
+                        max-width: 500px;
+                        border-radius: 0.5rem;
+                        display: none;
+                      "
+                    ></video>
+                    <div
+                      id="cameraPlaceholder"
+                      class="p-5 bg-light border rounded"
+                    >
+                      <i class="fas fa-camera fa-3x text-muted mb-3"></i>
+                      <p class="text-muted mb-0">
+                        Click "Start Camera" to take attendance photo
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Camera Controls -->
+                  <div class="mb-3">
+                    <button
+                      type="button"
+                      id="startCameraBtn"
+                      class="btn btn-primary me-2"
+                    >
+                      <i class="fas fa-video me-2"></i>Start Camera
+                    </button>
+                    <button
+                      type="button"
+                      id="captureBtn"
+                      class="btn btn-success me-2"
+                      style="display: none"
+                    >
+                      <i class="fas fa-camera me-2"></i>Capture Photo
+                    </button>
+                    <button
+                      type="button"
+                      id="retakeBtn"
+                      class="btn btn-warning"
+                      style="display: none"
+                    >
+                      <i class="fas fa-redo me-2"></i>Retake
+                    </button>
+                  </div>
+
+                  <!-- Captured Image -->
+                  <canvas id="canvas" style="display: none"></canvas>
+                  <div id="capturedImageSection" style="display: none">
+                    <img
+                      id="capturedImage"
+                      class="img-fluid rounded"
+                      style="max-width: 300px"
+                    />
+                    <p class="text-success mt-2">
+                      <i class="fas fa-check-circle me-2"></i>Photo captured
+                      successfully
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes Section -->
+          <div class="row mb-4">
+            <div class="col-12">
+              <label for="notes" class="form-label">Additional Notes</label>
+              <textarea
+                class="form-control"
+                id="notes"
+                name="notes"
+                rows="3"
+                placeholder="Provide any additional context or explanation for this attendance request..."
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Current Date/Time Info -->
+          <div class="row mb-4">
+            <div class="col-12">
+              <div class="card bg-light">
+                <div class="card-body">
+                  <div class="row text-center">
+                    <div class="col-md-4">
+                      <div class="border-end">
+                        <i class="fas fa-calendar text-primary"></i>
+                        <div class="fw-bold">Current Date</div>
+                        <div id="currentDate" class="text-muted"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="border-end">
+                        <i class="fas fa-clock text-primary"></i>
+                        <div class="fw-bold">Current Time</div>
+                        <div id="currentTime" class="text-muted"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <i class="fas fa-user text-primary"></i>
+                      <div class="fw-bold">Submitted By</div>
+                      <div class="text-muted">{{ current_user.username }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="row">
+            <div class="col-12">
+              <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a
+                  href="{{ url_for('pending.index') }}"
+                  class="btn btn-secondary me-md-2"
+                >
+                  <i class="fas fa-times me-2"></i>Cancel
+                </a>
+                <button
+                  type="submit"
+                  id="submitBtn"
+                  class="btn btn-success"
+                  disabled
+                >
+                  <i class="fas fa-paper-plane me-2"></i>Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-check-circle me-2"></i>Request Submitted
+        </h5>
+      </div>
+      <div class="modal-body text-center">
+        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+        <h5>Attendance Request Submitted Successfully!</h5>
+        <p class="text-muted">
+          Your attendance request has been sent to administrators for approval.
+          You will be notified once it's processed.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <a href="{{ url_for('pending.index') }}" class="btn btn-primary">
+          View Pending Requests
+        </a>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          onclick="location.reload()"
+        >
+          Submit Another
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  let video = null;
+  let canvas = null;
+  let capturedImageData = null;
+
+  $(document).ready(function () {
+    video = document.getElementById("video");
+    canvas = document.getElementById("canvas");
+
+    // Update current date and time
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    // Form validation
+    $("#personnel_id, #attendance_type").on("change", validateForm);
+
+    // Camera controls
+    $("#startCameraBtn").on("click", startCamera);
+    $("#captureBtn").on("click", capturePhoto);
+    $("#retakeBtn").on("click", retakePhoto);
+
+    // Form submission
+    $("#attendanceRequestForm").on("submit", submitRequest);
+  });
+
+  function updateDateTime() {
+    const now = new Date();
+    const dateOptions = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+    const timeOptions = {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    };
+
+    $("#currentDate").text(now.toLocaleDateString("en-US", dateOptions));
+    $("#currentTime").text(now.toLocaleTimeString("en-US", timeOptions));
+  }
+
+  function validateForm() {
+    const personnelSelected = $("#personnel_id").val() !== "";
+    const typeSelected = $("#attendance_type").val() !== "";
+    const photoTaken = capturedImageData !== null;
+
+    const isValid = personnelSelected && typeSelected && photoTaken;
+    $("#submitBtn").prop("disabled", !isValid);
+
+    return isValid;
+  }
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      });
+
+      video.srcObject = stream;
+      video.style.display = "block";
+      $("#cameraPlaceholder").hide();
+      $("#startCameraBtn").hide();
+      $("#captureBtn").show();
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      showAlert("error", "Failed to access camera. Please check permissions.");
+    }
+  }
+
+  function capturePhoto() {
+    const context = canvas.getContext("2d");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get image data
+    capturedImageData = canvas.toDataURL("image/jpeg", 0.8);
+
+    // Display captured image
+    $("#capturedImage").attr("src", capturedImageData);
+    $("#capturedImageSection").show();
+
+    // Hide video and show retake button
+    video.style.display = "none";
+    $("#captureBtn").hide();
+    $("#retakeBtn").show();
+
+    // Stop camera stream
+    const stream = video.srcObject;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    validateForm();
+  }
+
+  function retakePhoto() {
+    capturedImageData = null;
+    $("#capturedImageSection").hide();
+    $("#retakeBtn").hide();
+    $("#startCameraBtn").show();
+    $("#cameraPlaceholder").show();
+    validateForm();
+  }
+
+  async function submitRequest(e) {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      showAlert("error", "Please complete all required fields");
+      return;
+    }
+
+    const submitBtn = $("#submitBtn");
+    const originalText = submitBtn.html();
+    submitBtn
+      .html('<i class="fas fa-spinner fa-spin me-2"></i>Submitting...')
+      .prop("disabled", true);
+
+    try {
+      const formData = {
+        personnel_id: $("#personnel_id").val(),
+        attendance_type: $("#attendance_type").val(),
+        image: capturedImageData,
+        notes: $("#notes").val(),
+      };
+
+      const response = await fetch("/pending/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        $("#successModal").modal("show");
+      } else {
+        showAlert("error", data.error || "Failed to submit request");
+        submitBtn.html(originalText).prop("disabled", false);
+      }
+    } catch (error) {
+      console.error("Error submitting request:", error);
+      showAlert("error", "An error occurred while submitting the request");
+      submitBtn.html(originalText).prop("disabled", false);
+    }
+  }
+
+  function showAlert(type, message) {
+    const alertClass = type === "success" ? "alert-success" : "alert-danger";
+    const alertIcon =
+      type === "success" ? "check-circle" : "exclamation-triangle";
+
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${alertIcon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    $(".row").first().before(alertHtml);
+
+    setTimeout(() => {
+      $(".alert").alert("close");
+    }, 5000);
+  }
+</script>
+{% endblock %}

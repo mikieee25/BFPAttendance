@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}Attendance Summary Report - BFP Sorsogon Attendance System{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-chart-bar me-2"></i>Attendance Summary Report
+      </h1>
+      <div>
+        <a href="{{ url_for('reports.index') }}" class="btn btn-secondary me-2">
+          <i class="fas fa-arrow-left me-2"></i>Back to Reports
+        </a>
+        <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date, station_id=selected_station, format='xlsx') }}" class="btn btn-success">
+          <i class="fas fa-file-excel me-2"></i>Export Excel
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-filter me-2"></i>Report Filters
+        </h6>
+      </div>
+      <div class="card-body">
+        <form method="GET" class="row align-items-end">
+          <div class="col-md-3">
+            <label for="start_date" class="form-label">Start Date:</label>
+            <input type="date" class="form-control" id="start_date" name="start_date" 
+                   value="{{ start_date }}" required>
+          </div>
+          <div class="col-md-3">
+            <label for="end_date" class="form-label">End Date:</label>
+            <input type="date" class="form-control" id="end_date" name="end_date" 
+                   value="{{ end_date }}" required>
+          </div>
+          {% if current_user.is_admin %}
+          <div class="col-md-3">
+            <label for="station_id" class="form-label">Station:</label>
+            <select class="form-select" id="station_id" name="station_id">
+              <option value="">All Stations</option>
+              {% for station in stations %}
+              <option value="{{ station.id }}" 
+                      {{ 'selected' if selected_station == station.id else '' }}>
+                {{ station.station_name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="fas fa-search me-2"></i>Generate Report
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="row mb-4">
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-primary shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+              Total Personnel
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ total_personnel }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-users fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+              Present Days
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ present_count }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-warning shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+              Late Days
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ late_count }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-clock fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-danger shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+              Attendance Rate
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              {{ "%.1f"|format(attendance_rate) }}%
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Daily Attendance Chart -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-area me-2"></i>Daily Attendance Trends
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="dailyAttendanceChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Personnel Summary Table -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-table me-2"></i>Personnel Attendance Summary
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-bordered" id="personnelSummaryTable" width="100%" cellspacing="0">
+            <thead>
+              <tr>
+                <th>Rank & Name</th>
+                <th>Station</th>
+                <th>Present Days</th>
+                <th>Late Days</th>
+                <th>Absent Days</th>
+                <th>Attendance Rate</th>
+                <th>Performance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for summary in personnel_summary %}
+              <tr>
+                <td>
+                  <div class="fw-bold">{{ summary.personnel.rank }}</div>
+                  <div class="text-sm text-muted">{{ summary.personnel.full_name }}</div>
+                </td>
+                <td>{{ summary.personnel.station.station_name }}</td>
+                <td>
+                  <span class="badge bg-success">{{ summary.present_days }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-warning">{{ summary.late_days }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-danger">{{ summary.absent_days }}</span>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="me-2">{{ "%.1f"|format(summary.attendance_rate) }}%</span>
+                    <div class="progress flex-grow-1" style="height: 8px;">
+                      <div class="progress-bar 
+                        {% if summary.attendance_rate >= 95 %}bg-success
+                        {% elif summary.attendance_rate >= 85 %}bg-warning
+                        {% else %}bg-danger{% endif %}" 
+                        style="width: {{ summary.attendance_rate }}%"></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {% if summary.attendance_rate >= 95 %}
+                    <span class="badge bg-success">Excellent</span>
+                  {% elif summary.attendance_rate >= 85 %}
+                    <span class="badge bg-warning">Good</span>
+                  {% elif summary.attendance_rate >= 75 %}
+                    <span class="badge bg-primary">Fair</span>
+                  {% else %}
+                    <span class="badge bg-danger">Poor</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Report Period Info -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <h6 class="font-weight-bold">Report Period:</h6>
+            <p class="mb-0">{{ start_date }} to {{ end_date }}</p>
+            <p class="mb-0 text-muted">Total Days: {{ total_days }}</p>
+          </div>
+          <div class="col-md-6">
+            <h6 class="font-weight-bold">Overall Performance:</h6>
+            <p class="mb-0">Attendance Rate: {{ "%.1f"|format(attendance_rate) }}%</p>
+            <p class="mb-0 text-muted">Punctuality Rate: {{ "%.1f"|format(punctuality_rate) }}%</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    $('#personnelSummaryTable').DataTable({
+        responsive: true,
+        order: [[5, 'desc']], // Sort by attendance rate
+        pageLength: 25,
+        columnDefs: [
+            { orderable: false, targets: [6] } // Disable sorting for performance column
+        ]
+    });
+
+    // Daily Attendance Chart
+    const dailyData = {
+        labels: [
+            {% for date, data in daily_summary.items() %}
+            '{{ date.strftime("%m/%d") }}',
+            {% endfor %}
+        ],
+        datasets: [{
+            label: 'Present',
+            data: [
+                {% for date, data in daily_summary.items() %}
+                {{ data.present }},
+                {% endfor %}
+            ],
+            backgroundColor: 'rgba(40, 167, 69, 0.8)',
+            borderColor: 'rgba(40, 167, 69, 1)',
+            borderWidth: 1
+        }, {
+            label: 'Late',
+            data: [
+                {% for date, data in daily_summary.items() %}
+                {{ data.late }},
+                {% endfor %}
+            ],
+            backgroundColor: 'rgba(255, 193, 7, 0.8)',
+            borderColor: 'rgba(255, 193, 7, 1)',
+            borderWidth: 1
+        }, {
+            label: 'Absent',
+            data: [
+                {% for date, data in daily_summary.items() %}
+                {{ data.absent }},
+                {% endfor %}
+            ],
+            backgroundColor: 'rgba(220, 53, 69, 0.8)',
+            borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1
+        }]
+    };
+
+    const dailyConfig = {
+        type: 'line',
+        data: dailyData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Daily Attendance Overview'
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    };
+
+    new Chart(document.getElementById('dailyAttendanceChart'), dailyConfig);
+});
+</script>
+{% endblock %}

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
@@ -103,7 +103,7 @@ def index():
 @dashboard_bp.route("/api/time")
 @login_required
 def get_current_time():
-    """API endpoint to get current time for the dashboard clock"""
+    """API endpoint to get current time for the dashboard clock - DEPRECATED: Now using client-side clock"""
     current_time = datetime.now()
     return jsonify(
         {

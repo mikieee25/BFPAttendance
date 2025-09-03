@@ -1,0 +1,444 @@
+{% extends "base.html" %} {% block title %}Monthly Trends Report - BFP Sorsogon
+Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-chart-line me-2"></i>Monthly Attendance Trends
+      </h1>
+      <div>
+        <a href="{{ url_for('reports.index') }}" class="btn btn-secondary me-2">
+          <i class="fas fa-arrow-left me-2"></i>Back to Reports
+        </a>
+        <button class="btn btn-success" onclick="exportChart()">
+          <i class="fas fa-download me-2"></i>Export Chart
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-primary shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+            >
+              Reporting Period
+            </div>
+            <div class="h6 mb-0 font-weight-bold text-gray-800">
+              Last 12 Months
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-success text-uppercase mb-1"
+            >
+              Highest Attendance
+            </div>
+            <div class="h6 mb-0 font-weight-bold text-gray-800">
+              {% set max_month = months_data | selectattr('attendance_rate') |
+              max(attribute='attendance_rate') %} {{ max_month.month }} ({{
+              "%.1f"|format(max_month.attendance_rate) }}%)
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-trophy fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-warning shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-warning text-uppercase mb-1"
+            >
+              Average Attendance
+            </div>
+            <div class="h6 mb-0 font-weight-bold text-gray-800">
+              {% set avg_rate = (months_data | sum(attribute='attendance_rate'))
+              / (months_data | length) %} {{ "%.1f"|format(avg_rate) }}%
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-chart-bar fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6 mb-4">
+    <div class="card border-left-info shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+              Current Month
+            </div>
+            <div class="h6 mb-0 font-weight-bold text-gray-800">
+              {{ months_data[-1].month }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-calendar-check fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance Rate Trend Chart -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-line me-2"></i>Monthly Attendance Rate Trend
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="attendanceRateChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Present vs Late Comparison -->
+<div class="row mb-4">
+  <div class="col-lg-6">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-bar me-2"></i>Present vs Late Comparison
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="presentLateChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-chart-pie me-2"></i>Punctuality Overview
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="punctualityChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monthly Data Table -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-table me-2"></i>Monthly Statistics
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table
+            class="table table-bordered"
+            id="monthlyDataTable"
+            width="100%"
+            cellspacing="0"
+          >
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Present Days</th>
+                <th>Late Days</th>
+                <th>Attendance Rate</th>
+                <th>Punctuality Rate</th>
+                <th>Performance</th>
+                <th>Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for month in months_data %}
+              <tr>
+                <td class="fw-bold">{{ month.month }}</td>
+                <td>
+                  <span class="badge bg-success">{{ month.present }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-warning">{{ month.late }}</span>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="me-2"
+                      >{{ "%.1f"|format(month.attendance_rate) }}%</span
+                    >
+                    <div class="progress flex-grow-1" style="height: 8px">
+                      <div
+                        class="progress-bar {% if month.attendance_rate >= 95 %}bg-success {% elif month.attendance_rate >= 85 %}bg-warning {% else %}bg-danger{% endif %}"
+                        style="width: {{ month.attendance_rate }}%"
+                      ></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="me-2"
+                      >{{ "%.1f"|format(month.punctuality_rate) }}%</span
+                    >
+                    <div class="progress flex-grow-1" style="height: 8px">
+                      <div
+                        class="progress-bar {% if month.punctuality_rate >= 95 %}bg-success {% elif month.punctuality_rate >= 85 %}bg-warning {% else %}bg-danger{% endif %}"
+                        style="width: {{ month.punctuality_rate }}%"
+                      ></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {% if month.attendance_rate >= 95 %}
+                  <span class="badge bg-success">Excellent</span>
+                  {% elif month.attendance_rate >= 85 %}
+                  <span class="badge bg-warning">Good</span>
+                  {% elif month.attendance_rate >= 75 %}
+                  <span class="badge bg-primary">Fair</span>
+                  {% else %}
+                  <span class="badge bg-danger">Poor</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if loop.index > 1 %} {% set prev_rate =
+                  months_data[loop.index0 - 1].attendance_rate %} {% if
+                  month.attendance_rate > prev_rate %}
+                  <i class="fas fa-arrow-up text-success" title="Improving"></i>
+                  {% elif month.attendance_rate < prev_rate %}
+                  <i
+                    class="fas fa-arrow-down text-danger"
+                    title="Declining"
+                  ></i>
+                  {% else %}
+                  <i class="fas fa-minus text-secondary" title="Stable"></i>
+                  {% endif %} {% else %}
+                  <i class="fas fa-minus text-secondary"></i>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  $(document).ready(function() {
+      // Initialize DataTable
+      $('#monthlyDataTable').DataTable({
+          responsive: true,
+          order: [[0, 'desc']], // Sort by month (descending)
+          pageLength: 12,
+          columnDefs: [
+              { orderable: false, targets: [5, 6] } // Disable sorting for performance and trend columns
+          ]
+      });
+
+      const monthLabels = [
+          {% for month in months_data %}
+          '{{ month.month }}',
+          {% endfor %}
+      ];
+
+      const attendanceRates = [
+          {% for month in months_data %}
+          {{ month.attendance_rate }},
+          {% endfor %}
+      ];
+
+      const punctualityRates = [
+          {% for month in months_data %}
+          {{ month.punctuality_rate }},
+          {% endfor %}
+      ];
+
+      const presentData = [
+          {% for month in months_data %}
+          {{ month.present }},
+          {% endfor %}
+      ];
+
+      const lateData = [
+          {% for month in months_data %}
+          {{ month.late }},
+          {% endfor %}
+      ];
+
+      // Attendance Rate Trend Chart
+      const attendanceRateConfig = {
+          type: 'line',
+          data: {
+              labels: monthLabels,
+              datasets: [{
+                  label: 'Attendance Rate (%)',
+                  data: attendanceRates,
+                  borderColor: 'rgba(54, 162, 235, 1)',
+                  backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                  borderWidth: 3,
+                  fill: true,
+                  tension: 0.4
+              }, {
+                  label: 'Punctuality Rate (%)',
+                  data: punctualityRates,
+                  borderColor: 'rgba(255, 99, 132, 1)',
+                  backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                  borderWidth: 3,
+                  fill: false,
+                  tension: 0.4
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  title: {
+                      display: true,
+                      text: 'Attendance and Punctuality Trends Over Time'
+                  }
+              },
+              scales: {
+                  y: {
+                      beginAtZero: true,
+                      max: 100,
+                      ticks: {
+                          callback: function(value) {
+                              return value + '%';
+                          }
+                      }
+                  }
+              }
+          }
+      };
+
+      // Present vs Late Chart
+      const presentLateConfig = {
+          type: 'bar',
+          data: {
+              labels: monthLabels,
+              datasets: [{
+                  label: 'Present',
+                  data: presentData,
+                  backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                  borderColor: 'rgba(40, 167, 69, 1)',
+                  borderWidth: 1
+              }, {
+                  label: 'Late',
+                  data: lateData,
+                  backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                  borderColor: 'rgba(255, 193, 7, 1)',
+                  borderWidth: 1
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  title: {
+                      display: true,
+                      text: 'Monthly Present vs Late Days'
+                  }
+              },
+              scales: {
+                  y: {
+                      beginAtZero: true,
+                      ticks: {
+                          stepSize: 1
+                      }
+                  }
+              }
+          }
+      };
+
+      // Punctuality Overview (Average)
+      const avgPunctuality = punctualityRates.reduce((a, b) => a + b, 0) / punctualityRates.length;
+      const avgLateRate = 100 - avgPunctuality;
+
+      const punctualityConfig = {
+          type: 'doughnut',
+          data: {
+              labels: ['On Time', 'Late'],
+              datasets: [{
+                  data: [avgPunctuality, avgLateRate],
+                  backgroundColor: [
+                      'rgba(40, 167, 69, 0.8)',
+                      'rgba(255, 193, 7, 0.8)'
+                  ],
+                  borderColor: [
+                      'rgba(40, 167, 69, 1)',
+                      'rgba(255, 193, 7, 1)'
+                  ],
+                  borderWidth: 2
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  title: {
+                      display: true,
+                      text: 'Average Punctuality (12 Months)'
+                  },
+                  legend: {
+                      position: 'bottom'
+                  }
+              }
+          }
+      };
+
+      // Initialize Charts
+      new Chart(document.getElementById('attendanceRateChart'), attendanceRateConfig);
+      new Chart(document.getElementById('presentLateChart'), presentLateConfig);
+      new Chart(document.getElementById('punctualityChart'), punctualityConfig);
+  });
+
+  // Export Chart Function
+  function exportChart() {
+      const canvas = document.getElementById('attendanceRateChart');
+      const link = document.createElement('a');
+      link.download = 'monthly_trends_chart.png';
+      link.href = canvas.toDataURL();
+      link.click();
+  }
+</script>
+{% endblock %}
