@@ -215,17 +215,20 @@
             <span class="navbar-toggler-icon"></span>
           </button>
 
-          <div class="navbar-nav ms-auto">
-            <!-- Greeting Message -->
-            {% if current_user.is_authenticated %}
-            <div class="nav-item d-flex align-items-center me-3">
+          <!-- Greeting Message (Left Side) -->
+          {% if current_user.is_authenticated %}
+          <div class="navbar-nav">
+            <div class="nav-item d-flex align-items-center">
               <span class="navbar-text text-white fw-bold fs-5">
                 {{ session.current_greeting or "Welcome" }}, {{
                 current_user.first_name or current_user.username }}!
               </span>
             </div>
-            {% endif %}
+          </div>
+          {% endif %}
 
+          <!-- User Dropdown (Right Side) -->
+          <div class="navbar-nav ms-auto">
             <div class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle d-flex align-items-center"
