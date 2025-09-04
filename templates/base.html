@@ -216,6 +216,16 @@
           </button>
 
           <div class="navbar-nav ms-auto">
+            <!-- Greeting Message -->
+            {% if current_user.is_authenticated %}
+            <div class="nav-item d-flex align-items-center me-3">
+              <span class="navbar-text text-white fw-bold fs-5">
+                {{ session.current_greeting or "Welcome" }}, {{
+                current_user.first_name or current_user.username }}!
+              </span>
+            </div>
+            {% endif %}
+
             <div class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle d-flex align-items-center"

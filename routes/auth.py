@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
+import random
 from models import db, User, ActivityLog, StationType
 
 auth_bp = Blueprint("auth", __name__)
@@ -21,6 +22,26 @@ def login():
 
         if user and check_password_hash(user.password, password):
             login_user(user, remember=remember)
+
+            # Set randomized greeting for this login session
+            greetings = [
+                "Welcome",
+                "Greetings",
+                "A pleasant day",
+                "Good day",
+                "Hello there",
+                "Salutations",
+                "Good to see you",
+                "Pleased to welcome you",
+                "It's great to have you back",
+                "Glad you're here",
+                "Welcome back",
+                "Nice to see you again",
+                "Great to have you",
+                "Wonderful to see you",
+                "Happy to welcome you",
+            ]
+            session["current_greeting"] = random.choice(greetings)
 
             # Log activity
             activity = ActivityLog(
@@ -53,7 +74,9 @@ def logout():
         db.session.add(activity)
         db.session.commit()
 
-        logout_user()
+    # Clear the greeting from session
+    session.pop("current_greeting", None)
+    logout_user()
     return redirect(url_for("auth.login"))
 
 

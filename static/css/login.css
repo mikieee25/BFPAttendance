@@ -15,7 +15,6 @@ body {
   font-family: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   position: relative;
-  /* Background will be set by inline styles in template */
 }
 
 .login-container {
@@ -42,7 +41,7 @@ body {
 }
 
 .login-header {
-  background: linear-gradient(135deg, var(--bfp-navy), var(--bfp-navy-dark));
+  background: linear-gradient(135deg, var(--bfp-red), #c82333);
   color: white;
   padding: 2.5rem 2rem;
   text-align: center;
@@ -125,7 +124,7 @@ body {
 }
 
 .btn-login {
-  background: linear-gradient(135deg, var(--bfp-navy), var(--bfp-navy-dark));
+  background: linear-gradient(135deg, var(--bfp-red), #c82333);
   border: none;
   border-radius: 0.5rem;
   padding: 0.875rem 1.5rem;
@@ -158,9 +157,9 @@ body {
 }
 
 .btn-login:hover {
-  background: linear-gradient(135deg, var(--bfp-navy-dark), var(--bfp-navy));
+  background: linear-gradient(135deg, #c82333, var(--bfp-red));
   transform: translateY(-2px);
-  box-shadow: 0 0.75rem 1.5rem rgba(30, 58, 138, 0.4);
+  box-shadow: 0 0.75rem 1.5rem rgba(220, 53, 69, 0.4);
   color: white;
 }
 
