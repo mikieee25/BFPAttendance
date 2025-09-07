@@ -28,10 +28,144 @@ def index():
     )
 
 
+@personnel_bp.route("/register", methods=["GET", "POST"])
+@login_required
+def register():
+    """Personnel registration route - serves the register template with correct data"""
+
+    if request.method == "POST":
+        # This will handle the same logic as the add route
+        return add()
+
+    # Get stations for dropdown - use actual User records
+    if current_user.is_admin:
+        stations = User.query.all()
+    else:
+        stations = [current_user]
+
+    return render_template("auth/register.html", stations=stations)
+
+
 @personnel_bp.route("/add", methods=["GET", "POST"])
 @login_required
 def add():
     if request.method == "POST":
+        # Check if it's an AJAX request expecting JSON response
+        if (
+            request.headers.get("Content-Type") == "application/json"
+            or request.args.get("api") == "true"
+        ):
+            try:
+                data = (
+                    request.get_json()
+                    if request.headers.get("Content-Type") == "application/json"
+                    else request.form
+                )
+
+                first_name = data.get("first_name", "").strip()
+                last_name = data.get("last_name", "").strip()
+                middle_name = data.get("middle_name", "").strip() or None
+                suffix = data.get("suffix", "").strip() or None
+                rank = data.get("rank", "").strip()
+                station_id_or_type = data.get("station_id", "").strip()
+                hire_date_str = data.get("hire_date", "").strip()
+                email = data.get("email", "").strip()
+                phone = data.get("phone", "").strip() or None
+                address = data.get("address", "").strip() or None
+                status = data.get("status", "ACTIVE").strip()
+                shift_schedule = data.get("shift_schedule", "DAY_SHIFT").strip()
+                notes = data.get("notes", "").strip() or None
+
+                # Handle station_id - could be integer ID or station type string
+                station_id = None
+                try:
+                    # First try to parse as integer
+                    station_id = int(station_id_or_type)
+                except ValueError:
+                    # It's a station type string, find the corresponding user/station
+                    station_type_map = {
+                        "CENTRAL": StationType.CENTRAL,
+                        "TALISAY": StationType.TALISAY,
+                        "BACON": StationType.BACON,
+                        "ABUYOG": StationType.ABUYOG,
+                    }
+                    if station_id_or_type in station_type_map:
+                        station_user = User.query.filter_by(
+                            station_type=station_type_map[station_id_or_type]
+                        ).first()
+                        if station_user:
+                            station_id = station_user.id
+                        else:
+                            return jsonify(
+                                {
+                                    "success": False,
+                                    "error": f"No user found for station type {station_id_or_type}",
+                                }
+                            )
+                    else:
+                        return jsonify(
+                            {
+                                "success": False,
+                                "error": f"Invalid station type: {station_id_or_type}",
+                            }
+                        )
+
+                if not station_id:
+                    return jsonify(
+                        {"success": False, "error": "Invalid station selection"}
+                    )
+
+                # Validation
+                if not all([first_name, last_name, rank]):
+                    return jsonify(
+                        {
+                            "success": False,
+                            "error": "Please fill in all required fields",
+                        }
+                    )
+
+                # Validate station access
+                if not current_user.is_admin and station_id != current_user.id:
+                    return jsonify(
+                        {
+                            "success": False,
+                            "error": "You can only add personnel to your own station",
+                        }
+                    )
+
+                # Create new personnel
+                new_personnel = Personnel(
+                    first_name=first_name,
+                    last_name=last_name,
+                    rank=rank,
+                    station_id=station_id,
+                )
+
+                db.session.add(new_personnel)
+                db.session.flush()  # Get the ID
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    title="Personnel Added",
+                    description=f"Personnel {new_personnel.full_name} added to station {station_id}",
+                )
+                db.session.add(activity)
+                db.session.commit()
+
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": "Personnel registered successfully",
+                        "personnel_id": new_personnel.id,
+                    }
+                )
+
+            except Exception as e:
+                db.session.rollback()
+                return jsonify({"success": False, "error": str(e)})
+
+        # Regular form submission (non-AJAX)
         first_name = request.form["first_name"]
         last_name = request.form["last_name"]
         rank = request.form["rank"]

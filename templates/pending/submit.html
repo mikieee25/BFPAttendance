@@ -97,7 +97,31 @@ Sorsogon Attendance System{% endblock %} {% block content %}
               </label>
               <div class="card">
                 <div class="card-body text-center">
-                  <!-- Camera View -->
+                  <!-- Photo Source Selection -->
+                  <div id="photoSourceSelection" class="mb-3">
+                    <div
+                      class="btn-group"
+                      role="group"
+                      aria-label="Photo source selection"
+                    >
+                      <button
+                        type="button"
+                        id="cameraOptionBtn"
+                        class="btn btn-outline-primary active"
+                      >
+                        <i class="fas fa-camera me-2"></i>Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        id="galleryOptionBtn"
+                        class="btn btn-outline-primary"
+                      >
+                        <i class="fas fa-images me-2"></i>Upload from Gallery
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Camera Section -->
                   <div id="cameraSection" class="mb-3">
                     <video
                       id="video"
@@ -121,8 +145,30 @@ Sorsogon Attendance System{% endblock %} {% block content %}
                     </div>
                   </div>
 
+                  <!-- Gallery Upload Section -->
+                  <div id="gallerySection" class="mb-3" style="display: none">
+                    <div class="p-5 bg-light border rounded">
+                      <i
+                        class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"
+                      ></i>
+                      <p class="text-muted mb-3">
+                        Select a photo from your device
+                      </p>
+                      <input
+                        type="file"
+                        id="fileInput"
+                        accept="image/*"
+                        class="form-control mb-3"
+                        style="max-width: 300px; margin: 0 auto"
+                      />
+                      <small class="text-muted"
+                        >Supported formats: JPG, PNG, GIF</small
+                      >
+                    </div>
+                  </div>
+
                   <!-- Camera Controls -->
-                  <div class="mb-3">
+                  <div id="cameraControls" class="mb-3">
                     <button
                       type="button"
                       id="startCameraBtn"
@@ -148,7 +194,19 @@ Sorsogon Attendance System{% endblock %} {% block content %}
                     </button>
                   </div>
 
-                  <!-- Captured Image -->
+                  <!-- Gallery Controls -->
+                  <div id="galleryControls" class="mb-3" style="display: none">
+                    <button
+                      type="button"
+                      id="clearImageBtn"
+                      class="btn btn-warning"
+                      style="display: none"
+                    >
+                      <i class="fas fa-times me-2"></i>Clear Image
+                    </button>
+                  </div>
+
+                  <!-- Captured/Uploaded Image -->
                   <canvas id="canvas" style="display: none"></canvas>
                   <div id="capturedImageSection" style="display: none">
                     <img
@@ -157,8 +215,10 @@ Sorsogon Attendance System{% endblock %} {% block content %}
                       style="max-width: 300px"
                     />
                     <p class="text-success mt-2">
-                      <i class="fas fa-check-circle me-2"></i>Photo captured
-                      successfully
+                      <i class="fas fa-check-circle me-2"></i
+                      ><span id="imageStatusText"
+                        >Photo captured successfully</span
+                      >
                     </p>
                   </div>
                 </div>
@@ -275,6 +335,7 @@ Sorsogon Attendance System{% endblock %} {% block content %}
   let video = null;
   let canvas = null;
   let capturedImageData = null;
+  let currentPhotoSource = "camera"; // 'camera' or 'gallery'
 
   $(document).ready(function () {
     video = document.getElementById("video");
@@ -287,10 +348,22 @@ Sorsogon Attendance System{% endblock %} {% block content %}
     // Form validation
     $("#personnel_id, #attendance_type").on("change", validateForm);
 
+    // Photo source selection
+    $("#cameraOptionBtn").on("click", function () {
+      switchPhotoSource("camera");
+    });
+    $("#galleryOptionBtn").on("click", function () {
+      switchPhotoSource("gallery");
+    });
+
     // Camera controls
     $("#startCameraBtn").on("click", startCamera);
     $("#captureBtn").on("click", capturePhoto);
     $("#retakeBtn").on("click", retakePhoto);
+
+    // Gallery controls
+    $("#fileInput").on("change", handleFileUpload);
+    $("#clearImageBtn").on("click", clearUploadedImage);
 
     // Form submission
     $("#attendanceRequestForm").on("submit", submitRequest);
@@ -313,6 +386,128 @@ Sorsogon Attendance System{% endblock %} {% block content %}
 
     $("#currentDate").text(now.toLocaleDateString("en-US", dateOptions));
     $("#currentTime").text(now.toLocaleTimeString("en-US", timeOptions));
+  }
+
+  function switchPhotoSource(source) {
+    currentPhotoSource = source;
+
+    // Reset any existing image
+    clearAllImages();
+
+    if (source === "camera") {
+      // Show camera UI, hide gallery UI
+      $("#cameraOptionBtn").addClass("active");
+      $("#galleryOptionBtn").removeClass("active");
+      $("#cameraSection").show();
+      $("#gallerySection").hide();
+      $("#cameraControls").show();
+      $("#galleryControls").hide();
+    } else if (source === "gallery") {
+      // Show gallery UI, hide camera UI
+      $("#galleryOptionBtn").addClass("active");
+      $("#cameraOptionBtn").removeClass("active");
+      $("#cameraSection").hide();
+      $("#gallerySection").show();
+      $("#cameraControls").hide();
+      $("#galleryControls").show();
+
+      // Stop any active camera stream
+      stopCameraStream();
+    }
+
+    validateForm();
+  }
+
+  function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      showAlert("error", "Please select a valid image file");
+      event.target.value = "";
+      return;
+    }
+
+    // Validate file size (e.g., max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showAlert(
+        "error",
+        "Image file is too large. Please select a file smaller than 5MB"
+      );
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      // Create an image to resize if needed
+      const img = new Image();
+      img.onload = function () {
+        // Resize image to reasonable dimensions
+        const maxWidth = 800;
+        const maxHeight = 600;
+        let { width, height } = img;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = width * ratio;
+          height = height * ratio;
+        }
+
+        // Draw resized image to canvas
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Get compressed image data
+        capturedImageData = canvas.toDataURL("image/jpeg", 0.8);
+
+        // Display the image
+        $("#capturedImage").attr("src", capturedImageData);
+        $("#imageStatusText").text("Image uploaded successfully");
+        $("#capturedImageSection").show();
+        $("#clearImageBtn").show();
+
+        validateForm();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearUploadedImage() {
+    capturedImageData = null;
+    $("#fileInput").val("");
+    $("#capturedImageSection").hide();
+    $("#clearImageBtn").hide();
+    validateForm();
+  }
+
+  function clearAllImages() {
+    capturedImageData = null;
+    $("#capturedImageSection").hide();
+    $("#fileInput").val("");
+    $("#clearImageBtn").hide();
+
+    // Reset camera UI
+    if (video && video.srcObject) {
+      stopCameraStream();
+    }
+    video && (video.style.display = "none");
+    $("#cameraPlaceholder").show();
+    $("#startCameraBtn").show();
+    $("#captureBtn").hide();
+    $("#retakeBtn").hide();
+  }
+
+  function stopCameraStream() {
+    if (video && video.srcObject) {
+      const stream = video.srcObject;
+      stream.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
   }
 
   function validateForm() {
@@ -358,6 +553,7 @@ Sorsogon Attendance System{% endblock %} {% block content %}
 
     // Display captured image
     $("#capturedImage").attr("src", capturedImageData);
+    $("#imageStatusText").text("Photo captured successfully");
     $("#capturedImageSection").show();
 
     // Hide video and show retake button

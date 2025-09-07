@@ -1,0 +1,243 @@
+{% extends "base.html" %} {% block title %}{{ personnel.full_name }} - Personnel
+View - BFP Sorsogon Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-user me-2"></i>Personnel Details
+      </h1>
+      <div class="btn-group">
+        <a href="{{ url_for('personnel.index') }}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left me-2"></i>Back to List
+        </a>
+        <a
+          href="{{ url_for('personnel.edit', personnel_id=personnel.id) }}"
+          class="btn btn-warning"
+        >
+          <i class="fas fa-edit me-2"></i>Edit
+        </a>
+        <a
+          href="{{ url_for('personnel.register_face_page', personnel_id=personnel.id) }}"
+          class="btn btn-bfp"
+        >
+          <i class="fas fa-camera me-2"></i>Register Face
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Personnel Information -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-id-card me-2"></i>Personnel Information
+        </h6>
+      </div>
+      <div class="card-body text-center">
+        {% if personnel.image_path %}
+        <img
+          src="{{ url_for('static', filename=personnel.image_path) }}"
+          alt="{{ personnel.full_name }}"
+          class="rounded-circle mb-3"
+          width="150"
+          height="150"
+          style="object-fit: cover"
+        />
+        {% else %}
+        <img
+          src="{{ url_for('static', filename='images/profile-placeholder.jpg') }}"
+          alt="No Photo"
+          class="rounded-circle mb-3"
+          width="150"
+          height="150"
+          style="object-fit: cover"
+        />
+        {% endif %}
+
+        <h4 class="card-title">{{ personnel.full_name }}</h4>
+        <p class="text-muted">{{ personnel.rank }}</p>
+
+        <div class="row text-center mt-4">
+          <div class="col-6">
+            <div class="card bg-primary text-white">
+              <div class="card-body">
+                <h5>{{ face_count }}</h5>
+                <small>Face Encodings</small>
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card bg-success text-white">
+              <div class="card-body">
+                <h5>{{ recent_attendance|length }}</h5>
+                <small>Recent Records</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-info-circle me-2"></i>Quick Information
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-5"><strong>Station:</strong></div>
+          <div class="col-7">
+            {{ personnel.station.station_name if personnel.station else
+            'Unknown' }}
+          </div>
+        </div>
+        <hr />
+        <div class="row">
+          <div class="col-5"><strong>Added:</strong></div>
+          <div class="col-7">
+            {{ personnel.date_created.strftime('%B %d, %Y') if
+            personnel.date_created else 'Unknown' }}
+          </div>
+        </div>
+        <hr />
+        <div class="row">
+          <div class="col-5"><strong>Face Status:</strong></div>
+          <div class="col-7">
+            {% if face_count > 0 %}
+            <span class="badge bg-success">Registered</span>
+            {% else %}
+            <span class="badge bg-warning">Not Registered</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Attendance -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-clock me-2"></i>Recent Attendance (Last 10 Records)
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if recent_attendance %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Status</th>
+                <th>Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attendance in recent_attendance %}
+              <tr>
+                <td>
+                  {{ attendance.date.strftime('%m/%d/%Y') if attendance.date
+                  else 'N/A' }}
+                </td>
+                <td>
+                  {% if attendance.time_in %}
+                  <span class="badge bg-success"
+                    >{{ attendance.time_in.strftime('%I:%M %p') }}</span
+                  >
+                  {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if attendance.time_out %}
+                  <span class="badge bg-danger"
+                    >{{ attendance.time_out.strftime('%I:%M %p') }}</span
+                  >
+                  {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if attendance.time_out %}
+                  <span class="badge bg-primary">Complete</span>
+                  {% else %}
+                  <span class="badge bg-warning">In Progress</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if attendance.time_in and attendance.time_out %} {% set
+                  duration = attendance.time_out - attendance.time_in %} {% set
+                  hours = duration.total_seconds() / 3600 %} {{
+                  "%.1f"|format(hours) }} hrs {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+          <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+          <h5 class="text-muted">No Attendance Records</h5>
+          <p class="text-muted">
+            This personnel has no attendance records yet.
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Face Recognition Status -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-camera me-2"></i>Face Recognition Status
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if face_count > 0 %}
+        <div class="alert alert-success" role="alert">
+          <i class="fas fa-check-circle me-2"></i>
+          <strong>Face Recognition Enabled:</strong> This personnel has {{
+          face_count }} face encoding(s) registered and can use the attendance
+          system.
+        </div>
+        <div class="d-grid gap-2">
+          <a
+            href="{{ url_for('personnel.register_face_page', personnel_id=personnel.id) }}"
+            class="btn btn-outline-primary"
+          >
+            <i class="fas fa-camera me-2"></i>Update Face Registration
+          </a>
+        </div>
+        {% else %}
+        <div class="alert alert-warning" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Face Recognition Not Set Up:</strong> This personnel needs to
+          register their face to use the attendance system.
+        </div>
+        <div class="d-grid gap-2">
+          <a
+            href="{{ url_for('personnel.register_face_page', personnel_id=personnel.id) }}"
+            class="btn btn-bfp"
+          >
+            <i class="fas fa-camera me-2"></i>Register Face Now
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

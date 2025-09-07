@@ -110,11 +110,52 @@ Attendance System{% endblock %} {% block content %}
   let video, canvas, ctx;
   let stream = null;
 
+  // Check browser compatibility
+  function checkBrowserCompatibility() {
+    const issues = [];
+
+    if (!navigator.mediaDevices) {
+      issues.push("MediaDevices API not supported");
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      issues.push("getUserMedia not supported");
+    }
+
+    if (
+      location.protocol !== "https:" &&
+      location.hostname !== "localhost" &&
+      location.hostname !== "127.0.0.1"
+    ) {
+      issues.push("HTTPS required for camera access (except localhost)");
+    }
+
+    return issues;
+  }
+
   async function initCamera() {
     try {
       video = document.getElementById("video");
       canvas = document.getElementById("canvas");
       ctx = canvas.getContext("2d");
+
+      // Check if MediaDevices API is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          "Camera access is not supported in this browser or requires HTTPS connection"
+        );
+      }
+
+      // Check if page is served over HTTPS (required for camera access)
+      if (
+        location.protocol !== "https:" &&
+        location.hostname !== "localhost" &&
+        location.hostname !== "127.0.0.1"
+      ) {
+        throw new Error(
+          "Camera access requires HTTPS connection. Please access the site using HTTPS or localhost."
+        );
+      }
 
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -134,12 +175,64 @@ Attendance System{% endblock %} {% block content %}
         `;
     } catch (error) {
       console.error("Error accessing camera:", error);
+
+      let errorMessage = error.message;
+      let suggestions = "";
+
+      if (error.name === "NotAllowedError") {
+        errorMessage =
+          "Camera access was denied. Please allow camera access and refresh the page.";
+        suggestions = `
+          <div class="mt-3">
+            <h6>To enable camera access:</h6>
+            <ul class="text-start">
+              <li>Click the camera icon in your browser's address bar</li>
+              <li>Select "Allow" for camera access</li>
+              <li>Refresh this page</li>
+            </ul>
+          </div>
+        `;
+      } else if (error.name === "NotFoundError") {
+        errorMessage =
+          "No camera found. Please connect a camera and try again.";
+      } else if (
+        error.name === "NotSupportedError" ||
+        error.message.includes("not supported")
+      ) {
+        errorMessage = "Camera access is not supported in this browser.";
+        suggestions = `
+          <div class="mt-3">
+            <h6>Try one of these solutions:</h6>
+            <ul class="text-start">
+              <li>Use a modern browser (Chrome, Firefox, Safari, Edge)</li>
+              <li>Access the site using HTTPS instead of HTTP</li>
+              <li>Use localhost (http://localhost:5000) for development</li>
+            </ul>
+          </div>
+        `;
+      } else if (error.message.includes("HTTPS")) {
+        suggestions = `
+          <div class="mt-3">
+            <h6>Camera access requires a secure connection:</h6>
+            <ul class="text-start">
+              <li>Access via HTTPS: <code>https://your-domain.com</code></li>
+              <li>Or use localhost: <code>http://localhost:5000</code></li>
+              <li>Or use local IP with HTTPS</li>
+            </ul>
+          </div>
+        `;
+      }
+
       document.getElementById("status").innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-circle me-2"></i>
-                Error accessing camera: ${error.message}
+                <strong>Camera Error:</strong> ${errorMessage}
+                ${suggestions}
             </div>
         `;
+
+      // Show retry button
+      document.getElementById("retryBtn").style.display = "inline-block";
     }
   }
 
@@ -273,12 +366,71 @@ Attendance System{% endblock %} {% block content %}
     });
 
   document.getElementById("retryBtn").addEventListener("click", function () {
-    location.reload();
+    // Clear previous status
+    document.getElementById("status").innerHTML = `
+      <div class="alert alert-info">
+        <i class="fas fa-spinner fa-spin me-2"></i>Retrying camera access...
+      </div>
+    `;
+
+    // Hide retry button
+    this.style.display = "none";
+
+    // Stop existing stream if any
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+    }
+
+    // Try to initialize camera again
+    setTimeout(() => {
+      const compatibilityIssues = checkBrowserCompatibility();
+
+      if (compatibilityIssues.length > 0) {
+        document.getElementById("status").innerHTML = `
+          <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Browser Compatibility Issues:</strong>
+            <ul class="mb-0 mt-2">
+              ${compatibilityIssues
+                .map((issue) => `<li>${issue}</li>`)
+                .join("")}
+            </ul>
+          </div>
+        `;
+        document.getElementById("retryBtn").style.display = "inline-block";
+      } else {
+        initCamera();
+      }
+    }, 1000);
   });
 
   // Initialize camera when page loads
   document.addEventListener("DOMContentLoaded", function () {
-    initCamera();
+    const compatibilityIssues = checkBrowserCompatibility();
+
+    if (compatibilityIssues.length > 0) {
+      document.getElementById("status").innerHTML = `
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Browser Compatibility Issues:</strong>
+          <ul class="mb-0 mt-2">
+            ${compatibilityIssues.map((issue) => `<li>${issue}</li>`).join("")}
+          </ul>
+          <div class="mt-3">
+            <h6>Recommended Solutions:</h6>
+            <ul class="mb-0">
+              <li>Use a modern browser (Chrome, Firefox, Safari, Edge)</li>
+              <li>Access via HTTPS or localhost</li>
+              <li>Enable camera permissions</li>
+            </ul>
+          </div>
+        </div>
+      `;
+      document.getElementById("retryBtn").style.display = "inline-block";
+    } else {
+      initCamera();
+    }
   });
 
   // Cleanup camera when leaving page

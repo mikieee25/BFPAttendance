@@ -1,0 +1,235 @@
+{% extends "base.html" %} {% block title %}Add Personnel - BFP Sorsogon
+Attendance System{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="page-title">
+        <i class="fas fa-user-plus me-2"></i>Add Personnel
+      </h1>
+      <a href="{{ url_for('personnel.index') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Personnel List
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-user-plus me-2"></i>Personnel Information
+        </h6>
+      </div>
+      <div class="card-body">
+        <form id="addPersonnelForm" enctype="multipart/form-data">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="first_name" class="form-label">
+                  First Name <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="first_name"
+                  name="first_name"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="last_name" class="form-label">
+                  Last Name <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="last_name"
+                  name="last_name"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="rank" class="form-label">
+                  Rank <span class="text-danger">*</span>
+                </label>
+                <select class="form-control" id="rank" name="rank" required>
+                  <option value="">Select Rank</option>
+                  <option value="Fire Officer I">Fire Officer I</option>
+                  <option value="Fire Officer II">Fire Officer II</option>
+                  <option value="Fire Officer III">Fire Officer III</option>
+                  <option value="Senior Fire Officer I">
+                    Senior Fire Officer I
+                  </option>
+                  <option value="Senior Fire Officer II">
+                    Senior Fire Officer II
+                  </option>
+                  <option value="Senior Fire Officer III">
+                    Senior Fire Officer III
+                  </option>
+                  <option value="Senior Fire Officer IV">
+                    Senior Fire Officer IV
+                  </option>
+                  <option value="Chief Fire Officer">Chief Fire Officer</option>
+                  <option value="Fire Chief">Fire Chief</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="station_id" class="form-label">
+                  Station <span class="text-danger">*</span>
+                </label>
+                <select
+                  class="form-control"
+                  id="station_id"
+                  name="station_id"
+                  required
+                >
+                  <option value="">Select Station</option>
+                  {% for station in stations %}
+                  <option value="{{ station.id }}">
+                    {{ station.station_name }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-12">
+              <div class="mb-3">
+                <label for="image" class="form-label"> Profile Photo </label>
+                <input
+                  type="file"
+                  class="form-control"
+                  id="image"
+                  name="image"
+                  accept="image/*"
+                />
+                <small class="form-text text-muted">
+                  Upload a clear photo for face recognition. Accepted formats:
+                  JPG, PNG, GIF
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-12">
+              <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button
+                  type="button"
+                  class="btn btn-secondary me-md-2"
+                  onclick="window.location.href='{{ url_for('personnel.index') }}'"
+                >
+                  <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button type="submit" class="btn btn-bfp">
+                  <i class="fas fa-save me-2"></i>Add Personnel
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div
+  class="modal fade"
+  id="successModal"
+  tabindex="-1"
+  aria-labelledby="successModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="successModalLabel">
+          <i class="fas fa-check-circle text-success me-2"></i>Success
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div id="successMessage"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-bfp" id="registerFaceBtn">
+          <i class="fas fa-camera me-2"></i>Register Face
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document
+    .getElementById("addPersonnelForm")
+    .addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      const submitBtn = this.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+
+      // Show loading state
+      submitBtn.disabled = true;
+      submitBtn.innerHTML =
+        '<i class="fas fa-spinner fa-spin me-2"></i>Adding Personnel...';
+
+      try {
+        const response = await fetch('{{ url_for("personnel.add") }}', {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          document.getElementById("successMessage").innerHTML = result.message;
+          const modal = new bootstrap.Modal(
+            document.getElementById("successModal")
+          );
+          modal.show();
+
+          // Set up register face button
+          document.getElementById("registerFaceBtn").onclick = function () {
+            window.location.href = `/personnel/register-face/${result.personnel_id}`;
+          };
+
+          // Reset form
+          this.reset();
+        } else {
+          alert("Error: " + result.error);
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        alert("An error occurred while adding personnel.");
+      } finally {
+        // Restore button state
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    });
+</script>
+
+{% endblock %}

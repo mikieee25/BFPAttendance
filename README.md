@@ -133,7 +133,20 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
    - Open your browser and go to `http://localhost:5000`
    - Default admin credentials:
      - Username: `admin`
-     - Password: `admin123`
+     - Password: `admin1234`
+   - Default station credentials:
+   - CENTRAL
+     - Username: `central`
+     - Password: `central1234`
+   - Talisay Sub-station
+     - Username: `talisay`
+     - Password: `talisay1234`
+   - Abuyog Sub-station
+     - Username: `abuyog`
+     - Password: `abuyog1234`
+   - Bacon Sub-station
+     - Username: `bacon`
+     - Password: `bacon1234`
 
 ## Configuration
 

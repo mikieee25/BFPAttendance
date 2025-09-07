@@ -14,11 +14,14 @@ def login():
         return redirect(url_for("dashboard.index"))
 
     if request.method == "POST":
-        username = request.form["username"]
+        username_or_email = request.form["username"]
         password = request.form["password"]
         remember = bool(request.form.get("remember"))
 
-        user = User.query.filter_by(username=username).first()
+        # Try to find user by username first, then by email
+        user = User.query.filter_by(username=username_or_email).first()
+        if not user:
+            user = User.query.filter_by(email=username_or_email).first()
 
         if user and check_password_hash(user.password, password):
             login_user(user, remember=remember)
@@ -47,7 +50,7 @@ def login():
             activity = ActivityLog(
                 user_id=user.id,
                 title="User Login",
-                description=f"User {user.username} logged in successfully",
+                description=f"User {user.username} logged in successfully using {'username' if User.query.filter_by(username=username_or_email).first() else 'email'}",
             )
             db.session.add(activity)
             db.session.commit()
@@ -57,7 +60,7 @@ def login():
                 return redirect(next_page)
             return redirect(url_for("dashboard.index"))
         else:
-            flash("Invalid username or password", "error")
+            flash("Invalid username/email or password", "error")
 
     return render_template("auth/login.html")
 

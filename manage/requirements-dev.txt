@@ -1,0 +1,10 @@
+# Management Scripts Requirements
+# Additional packages needed for development/testing management scripts
+
+# Fake data generation
+faker
+
+# Optional: Enhanced CLI experience
+colorama      # Better color support on Windows
+click         # CLI framework (alternative to argparse)
+tabulate      # Pretty table formatting
