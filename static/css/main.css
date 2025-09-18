@@ -943,3 +943,8 @@ h6,
   justify-content: center;
   align-items: center;
 }
+
+#dataManagement,
+#systemManagement {
+  height: 225px;
+}

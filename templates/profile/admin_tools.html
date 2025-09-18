@@ -89,7 +89,7 @@ System{% endblock %} {% block content %}
           <i class="fas fa-tools me-2"></i>System Management
         </h6>
       </div>
-      <div class="card-body">
+      <div class="card-body"  id="systemManagement">
         <div class="d-grid gap-2">
           <a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary">
             <i class="fas fa-users me-2"></i>Manage Users
@@ -115,7 +115,7 @@ System{% endblock %} {% block content %}
           <i class="fas fa-database me-2"></i>Data Management
         </h6>
       </div>
-      <div class="card-body">
+      <div class="card-body" id="dataManagement">
         <div class="d-grid gap-2">
           <button class="btn btn-success" onclick="performBackup()">
             <i class="fas fa-download me-2"></i>System Backup
