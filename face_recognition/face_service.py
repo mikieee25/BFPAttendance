@@ -1,16 +1,25 @@
+# Face Recognition Service for BFP Sorsogon Attendance System
+# Handles face detection, encoding, recognition, and attendance processing using YOLO and OpenCV
+
+# Standard library imports
 import os
+import uuid
+import json
+import base64
+import logging
+from datetime import datetime, timedelta
+
+# Computer vision and machine learning libraries
 import cv2
 import torch
 import numpy as np
-import json
-import logging
-import base64
 from ultralytics import YOLO
-from flask import current_app
-from datetime import datetime, timedelta
-import uuid
-from sqlalchemy import or_
 
+# Flask framework imports
+from flask import current_app
+
+# Database imports
+from sqlalchemy import or_
 from models import db, Personnel, FaceData, Attendance, AttendanceStatus, User
 
 # Set up logger
@@ -21,6 +30,14 @@ yolo_model = None
 
 
 def get_yolo_model():
+    """Initialize and return the YOLO face detection model.
+
+    Loads the YOLOv11 model for face detection with CPU/GPU configuration.
+    Uses global variable to avoid reloading the model on every call.
+
+    Returns:
+        YOLO: Configured YOLO model instance
+    """
     global yolo_model
     if yolo_model is None:
         model_path = current_app.config["YOLO_MODEL_PATH"]
@@ -50,16 +67,27 @@ def get_yolo_model():
 
 
 def extract_face_embeddings(image_path):
+    """Extract face embeddings from an image file.
+
+    Detects faces using YOLO model and creates a normalized embedding vector
+    for face recognition comparison.
+
+    Args:
+        image_path (str): Path to the image file
+
+    Returns:
+        tuple: (embedding_list, metadata_dict) or (None, None) if no face detected
+    """
     try:
         model = get_yolo_model()
 
-        # Read the image
+        # Load and validate image
         img = cv2.imread(image_path)
         if img is None:
             logger.warning(f"Could not read image: {image_path}")
             return None, None
 
-        # Run inference
+        # Run YOLO face detection
         results = model(
             img, conf=current_app.config.get("FACE_DETECTION_CONFIDENCE", 0.5)
         )
@@ -67,32 +95,33 @@ def extract_face_embeddings(image_path):
             logger.debug(f"No faces detected in image: {image_path}")
             return None, None
 
-        # Get the face with highest confidence
+        # Select the face with highest confidence
         boxes = results[0].boxes
         confidences = boxes.conf.cpu().numpy()
         max_idx = np.argmax(confidences)
 
-        # Get bounding box
+        # Extract bounding box coordinates and confidence score
         bbox = boxes.xyxy[max_idx].cpu().numpy().astype(int)
         confidence = float(confidences[max_idx])
 
-        # Extract face region
+        # Crop face region from original image
         face = img[bbox[1] : bbox[3], bbox[0] : bbox[2]]
 
-        # Simple face embedding (resize to standard size and flatten)
+        # Create standardized face embedding for comparison
+        # Resize to consistent dimensions for uniform comparison
         face_resized = cv2.resize(face, (128, 128))
 
-        # Convert to grayscale to reduce dimensionality
+        # Convert to grayscale to reduce dimensionality and improve consistency
         face_gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
 
-        # Create embedding by flattening and normalizing
+        # Create embedding by flattening pixel values
         embedding = face_gray.flatten().astype(float)
 
-        # Normalize embedding
+        # Normalize embedding vector for consistent comparison
         if np.linalg.norm(embedding) > 0:
             embedding = embedding / np.linalg.norm(embedding)
 
-        # Return as Python list and metadata
+        # Return embedding as Python list with metadata
         return embedding.tolist(), {
             "bbox": bbox.tolist(),
             "confidence": float(confidence),
@@ -104,6 +133,16 @@ def extract_face_embeddings(image_path):
 
 
 def compare_embeddings(emb1, emb2, threshold=0.75):
+    """Compare two face embeddings using cosine similarity.
+
+    Args:
+        emb1 (list): First face embedding
+        emb2 (list): Second face embedding
+        threshold (float): Similarity threshold for match determination
+
+    Returns:
+        tuple: (similarity_score, is_match_boolean)
+    """
     try:
         # Convert to flattened numpy arrays
         emb1 = np.array(emb1).flatten()
@@ -138,6 +177,14 @@ def compare_embeddings(emb1, emb2, threshold=0.75):
 
 
 def load_face_database(station_id=None):
+    """Load all face embeddings from database for recognition.
+
+    Args:
+        station_id (int, optional): Limit to specific station. None for all stations.
+
+    Returns:
+        dict: Dictionary mapping personnel_id to their face data and embeddings
+    """
     try:
         face_database = {}
 
@@ -178,6 +225,16 @@ def load_face_database(station_id=None):
 
 
 def recognize_face(face_embedding, face_database, threshold=None):
+    """Identify a person by comparing face embedding against database.
+
+    Args:
+        face_embedding (list): Face embedding to identify
+        face_database (dict): Database of known face embeddings
+        threshold (float, optional): Recognition threshold. Uses config default if None.
+
+    Returns:
+        tuple: (personnel_id, confidence_score) or (None, 0) if no match
+    """
     try:
         if face_embedding is None or not face_database:
             logger.warning("No face embedding or empty database")
@@ -215,6 +272,18 @@ def recognize_face(face_embedding, face_database, threshold=None):
 
 
 def process_attendance(personnel_id, confidence, base64_image=None):
+    """Process attendance record for identified personnel.
+
+    Handles time-in/time-out logic, cooldown periods, and duplicate prevention.
+
+    Args:
+        personnel_id (int): ID of identified personnel
+        confidence (float): Face recognition confidence score
+        base64_image (str, optional): Base64 encoded image for record keeping
+
+    Returns:
+        dict: Result with success status, action taken, and relevant data
+    """
     try:
         # Get personnel data
         personnel = Personnel.query.get(personnel_id)
@@ -417,6 +486,16 @@ def process_attendance(personnel_id, confidence, base64_image=None):
 
 
 def save_attendance_image(personnel_id, base64_image, prefix):
+    """Save attendance capture image for record keeping.
+
+    Args:
+        personnel_id (int): ID of personnel
+        base64_image (str): Base64 encoded image data
+        prefix (str): Filename prefix (e.g., 'time_in', 'time_out')
+
+    Returns:
+        str: Relative path to saved image or None if failed
+    """
     try:
         # Remove data URL header if present
         if "," in base64_image:
@@ -461,6 +540,14 @@ def save_attendance_image(personnel_id, base64_image, prefix):
 
 
 def process_base64_image(base64_image):
+    """Process base64 image data for face detection and embedding extraction.
+
+    Args:
+        base64_image (str): Base64 encoded image data
+
+    Returns:
+        tuple: (face_embedding, face_metadata, temp_file_path) or (None, None, None)
+    """
     try:
         # Remove data URL header if present
         if "," in base64_image:
@@ -515,6 +602,17 @@ def process_base64_image(base64_image):
 
 
 def register_face(personnel_id, base64_images):
+    """Register multiple face images for a personnel member.
+
+    Processes multiple face photos to create embeddings for improved recognition accuracy.
+
+    Args:
+        personnel_id (int): ID of personnel to register faces for
+        base64_images (list): List of base64 encoded image data
+
+    Returns:
+        dict: Result with success status and number of images registered
+    """
     try:
         # Get personnel data
         personnel = Personnel.query.get(personnel_id)
@@ -624,9 +722,12 @@ def register_face(personnel_id, base64_images):
 
 
 def cleanup_old_attendance_images():
-    """
-    Delete attendance images older than the configured retention period.
-    This function should be called periodically (e.g., daily) to clean up old images.
+    """Clean up old attendance images to free disk space.
+
+    Deletes attendance images older than the configured retention period.
+    Should be called periodically (e.g., daily) via cron job or task scheduler.
+
+    The retention period is configurable via ATTENDANCE_IMAGE_RETENTION_DAYS setting.
     """
     try:
         logger.info("Starting cleanup of old attendance images")

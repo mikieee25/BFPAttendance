@@ -1,53 +1,26 @@
+# Core Python libraries
 import os
 from datetime import datetime
-from flask import (
-    Flask,
-    render_template,
-    request,
-    jsonify,
-    redirect,
-    url_for,
-    flash,
-    session,
-)
-from flask_login import (
-    LoginManager,
-    login_user,
-    logout_user,
-    login_required,
-    current_user,
-)
+
+# Flask core framework and utilities
+from flask import Flask, render_template, redirect, url_for
+from flask_login import LoginManager, current_user
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
-import json
+from werkzeug.security import generate_password_hash
 
-from models import (
-    db,
-    User,
-    Personnel,
-    Attendance,
-    FaceData,
-    ActivityLog,
-    PendingAttendance,
-    StationType,
-    AttendanceStatus,
-)
-from face_recognition.face_service import (
-    process_base64_image,
-    recognize_face,
-    load_face_database,
-    process_attendance,
-    register_face,
-    cleanup_old_attendance_images,
-)
+# Database models and enums
+from models import db, User, StationType, AttendanceStatus
+
+# Face recognition service (imported but not used in app.py - available for blueprints)
+from face_recognition.face_service import cleanup_old_attendance_images
 
 
 def create_app():
+    """Create and configure the Flask application instance"""
     app = Flask(__name__)
 
-    # Configuration
+    # Application configuration settings
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL", "mysql+pymysql://root:@localhost/bfp_sorsogon_attendance"
@@ -72,32 +45,36 @@ def create_app():
     app.config["ATTENDANCE_COOLDOWN"] = 60  # seconds
     app.config["ATTENDANCE_IMAGE_RETENTION_DAYS"] = 7
 
-    # Create upload directories
+    # Create required directories for file uploads and temporary storage
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["TEMP_ATTENDANCE_FOLDER"], exist_ok=True)
 
-    # Initialize extensions
+    # Initialize database extension with app context
     db.init_app(app)
 
-    # Flask-Login setup
+    # Configure Flask-Login for user session management
     login_manager = LoginManager()
     login_manager.init_app(app)
-    login_manager.login_view = "auth.login"
+    login_manager.login_view = "auth.login"  # Redirect unauthorized users to login page
     login_manager.login_message = "Please log in to access this page."
 
     @login_manager.user_loader
     def load_user(user_id):
+        """Load user object from user ID stored in session"""
         return db.session.get(User, int(user_id))
 
-    # Rate limiting - More generous limits for dashboard application
+    # Configure rate limiting to prevent abuse (generous limits for internal use)
     limiter = Limiter(
-        key_func=get_remote_address,
+        key_func=get_remote_address,  # Use client IP for rate limiting
         app=app,
-        default_limits=["1000 per day", "200 per hour"],
-        storage_uri="memory://",
+        default_limits=[
+            "1000 per day",
+            "200 per hour",
+        ],  # Reasonable limits for BFP usage
+        storage_uri="memory://",  # Store rate limit data in memory
     )
 
-    # Make limiter available to blueprints
+    # Make limiter available to all blueprints
     app.limiter = limiter
 
     # Register blueprints
@@ -121,49 +98,56 @@ def create_app():
 
     @app.route("/")
     def index():
+        """Root route - redirect authenticated users to dashboard, others to login"""
         if current_user.is_authenticated:
             return redirect(url_for("dashboard.index"))
         return redirect(url_for("auth.login"))
 
-    # Error handlers
+    # Custom error page handlers
     @app.errorhandler(404)
     def not_found_error(error):
+        """Handle 404 Not Found errors with custom template"""
         return render_template("errors/404.html"), 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        db.session.rollback()
+        """Handle 500 Internal Server errors and rollback database changes"""
+        db.session.rollback()  # Rollback any incomplete database transactions
         return render_template("errors/500.html"), 500
 
-    # Template filters
+    # Custom Jinja2 template filters for date/time formatting
     @app.template_filter("datetime")
     def datetime_filter(value, format="%Y-%m-%d %H:%M:%S"):
+        """Format datetime objects in templates"""
         if value is None:
             return ""
         return value.strftime(format)
 
     @app.template_filter("date")
     def date_filter(value, format="%Y-%m-%d"):
+        """Format date objects in templates"""
         if value is None:
             return ""
         return value.strftime(format)
 
     @app.template_filter("time")
     def time_filter(value, format="%H:%M:%S"):
+        """Format time objects in templates"""
         if value is None:
             return ""
         return value.strftime(format)
 
-    # Context processors
+    # Global template context - make enums available in all templates
     @app.context_processor
     def inject_station_types():
+        """Make StationType and AttendanceStatus enums available in all templates"""
         return dict(StationType=StationType, AttendanceStatus=AttendanceStatus)
 
-    # Initialize database
+    # Initialize database and create default admin user
     with app.app_context():
-        db.create_all()
+        db.create_all()  # Create all database tables
 
-        # Create default admin user if not exists
+        # Create default admin user if it doesn't exist
         admin = User.query.filter_by(username="admin").first()
         if not admin:
             admin = User(

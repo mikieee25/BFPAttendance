@@ -1,8 +1,16 @@
+# Authentication routes for BFP Sorsogon Attendance System
+# Handles user login, logout, registration, and user management
+
+# Flask framework imports
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, current_user
+
+# Security and utilities
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 import random
+
+# Database models
 from models import db, User, ActivityLog, StationType
 
 auth_bp = Blueprint("auth", __name__)
@@ -10,10 +18,17 @@ auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    """Handle user authentication with username or email support.
+
+    Supports login with either username or email address.
+    Sets randomized greeting message for successful logins.
+    """
+    # Redirect already authenticated users to dashboard
     if current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 
     if request.method == "POST":
+        # Extract form data
         username_or_email = request.form["username"]
         password = request.form["password"]
         remember = bool(request.form.get("remember"))
@@ -67,6 +82,10 @@ def login():
 
 @auth_bp.route("/logout")
 def logout():
+    """Handle user logout and session cleanup.
+
+    Logs the logout activity and clears session data including greeting.
+    """
     if current_user.is_authenticated:
         # Log activity
         activity = ActivityLog(
@@ -85,6 +104,12 @@ def logout():
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
+    """Handle new user registration (admin only).
+
+    Only administrators can create new user accounts.
+    Validates form data and creates new users with proper station assignments.
+    """
+    # Check admin permissions
     if not current_user.is_authenticated or not current_user.is_admin:
         flash("Access denied. Only administrators can create new accounts.", "error")
         return redirect(url_for("auth.login"))
@@ -156,14 +181,7 @@ def register():
         flash("User registered successfully", "success")
         return redirect(url_for("auth.manage_users"))
 
-    # Station types for dropdown
-    station_types_list = [
-        {"id": "CENTRAL", "station_name": "Central Station"},
-        {"id": "TALISAY", "station_name": "Talisay Station"},
-        {"id": "BACON", "station_name": "Bacon Station"},
-        {"id": "ABUYOG", "station_name": "Abuyog Station"},
-    ]
-
+    # Return form with station types for dropdown (same as above)
     return render_template(
         "auth/register.html",
         station_types=StationType,
@@ -174,6 +192,11 @@ def register():
 
 @auth_bp.route("/manage-users")
 def manage_users():
+    """Display user management page with statistics (admin only).
+
+    Shows all users with filtering options and summary statistics.
+    """
+    # Check admin permissions
     if not current_user.is_authenticated or not current_user.is_admin:
         flash("Access denied. Only administrators can manage users.", "error")
         return redirect(url_for("dashboard.index"))
@@ -218,10 +241,17 @@ def manage_users():
 
 @auth_bp.route("/delete-user/<int:user_id>", methods=["POST"])
 def delete_user(user_id):
+    """Delete a user account (admin only).
+
+    Prevents users from deleting their own accounts for safety.
+    Logs the deletion activity before removing the user.
+    """
+    # Check admin permissions
     if not current_user.is_authenticated or not current_user.is_admin:
         flash("Access denied. Only administrators can delete users.", "error")
         return redirect(url_for("dashboard.index"))
 
+    # Prevent self-deletion
     if user_id == current_user.id:
         flash("You cannot delete your own account", "error")
         return redirect(url_for("auth.manage_users"))

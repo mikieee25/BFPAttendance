@@ -1,10 +1,19 @@
+# Attendance management routes for BFP Sorsogon Attendance System
+# Handles attendance viewing, face recognition capture, manual entry, and CRUD operations
+
+# Flask framework imports
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
+
+# Date/time utilities and database queries
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, desc, and_, or_
 import os
 
+# Database models
 from models import db, Personnel, Attendance, User, AttendanceStatus, ActivityLog
+
+# Face recognition service functions
 from face_recognition.face_service import (
     process_base64_image,
     recognize_face,
@@ -18,7 +27,15 @@ attendance_bp = Blueprint("attendance", __name__)
 @attendance_bp.route("/")
 @login_required
 def index():
-    # Get date range from query params
+    """Display attendance records with filtering options.
+
+    Shows attendance records based on user permissions:
+    - Admins can see all stations
+    - Station users see only their station's records
+
+    Supports filtering by date range, personnel, and status.
+    """
+    # Get filter parameters from query string
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
     personnel_id = request.args.get("personnel_id")
@@ -35,11 +52,12 @@ def index():
     else:
         end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-    # Base query
+    # Build base query with station access control
     if current_user.is_admin:
-        attendance_query = Attendance.query.join(Personnel)
+        attendance_query = Attendance.query.join(Personnel)  # Admin sees all stations
         personnel_list = Personnel.query.all()
     else:
+        # Station users see only their own station's personnel
         attendance_query = Attendance.query.join(Personnel).filter(
             Personnel.station_id == current_user.id
         )
@@ -80,12 +98,23 @@ def index():
 @attendance_bp.route("/capture")
 @login_required
 def capture():
+    """Display the face recognition attendance capture interface.
+
+    Provides camera interface for biometric attendance recording.
+    """
     return render_template("attendance/capture.html")
 
 
 @attendance_bp.route("/api/capture", methods=["POST"])
 @login_required
 def api_capture():
+    """API endpoint for processing face recognition attendance capture.
+
+    Processes base64 image data, performs face recognition,
+    and records attendance if person is identified.
+
+    Returns JSON response with success status and attendance details.
+    """
     try:
         data = request.get_json()
         image_data = data.get("image")
@@ -158,6 +187,11 @@ def api_capture():
 @attendance_bp.route("/manual", methods=["GET", "POST"])
 @login_required
 def manual():
+    """Handle manual attendance entry when face recognition is not available.
+
+    Allows authorized users to manually record attendance with time entries.
+    Validates personnel access based on station permissions.
+    """
     if request.method == "POST":
         personnel_id = request.form["personnel_id"]
         attendance_date = datetime.strptime(request.form["date"], "%Y-%m-%d").date()
@@ -166,7 +200,7 @@ def manual():
         status = AttendanceStatus(request.form["status"])
         notes = request.form.get("notes", "")
 
-        # Validate personnel access
+        # Validate user has permission to add attendance for this personnel
         personnel = Personnel.query.get_or_404(personnel_id)
         if not current_user.is_admin and personnel.station_id != current_user.id:
             flash(
@@ -218,7 +252,7 @@ def manual():
         flash("Attendance record added successfully", "success")
         return redirect(url_for("attendance.index"))
 
-    # Get personnel for dropdown
+    # Get personnel list for form dropdown (filtered by station access)
     if current_user.is_admin:
         personnel_list = Personnel.query.all()
     else:
@@ -235,6 +269,11 @@ def manual():
 @attendance_bp.route("/edit/<int:attendance_id>", methods=["GET", "POST"])
 @login_required
 def edit(attendance_id):
+    """Edit existing attendance record.
+
+    Allows modification of attendance status and time entries.
+    Access controlled by station permissions.
+    """
     attendance = Attendance.query.get_or_404(attendance_id)
 
     # Check access
@@ -280,6 +319,10 @@ def edit(attendance_id):
 @attendance_bp.route("/delete/<int:attendance_id>", methods=["POST"])
 @login_required
 def delete(attendance_id):
+    """Delete an attendance record.
+
+    Removes attendance record with proper access control and activity logging.
+    """
     attendance = Attendance.query.get_or_404(attendance_id)
 
     # Check access
@@ -314,8 +357,12 @@ def delete(attendance_id):
 @attendance_bp.route("/api/data")
 @login_required
 def api_data():
-    """DataTables API endpoint"""
-    # Get query parameters
+    """DataTables API endpoint for attendance table data.
+
+    Provides paginated, searchable attendance data for DataTables frontend.
+    Respects user station permissions for data filtering.
+    """
+    # Get DataTables query parameters
     draw = request.args.get("draw", type=int)
     start = request.args.get("start", type=int)
     length = request.args.get("length", type=int)

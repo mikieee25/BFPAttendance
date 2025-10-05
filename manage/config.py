@@ -1,12 +1,12 @@
-"""
-Base configuration for management scripts
-"""
+# Management Scripts Configuration
+# Provides shared utilities, database context, and styling for all management scripts
+# Used by clean_database.py, generate_fake_data.py, backup_database.py, etc.
 
 import os
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import models
+# Add parent directory to Python path so we can import models and Flask app
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
@@ -46,17 +46,17 @@ def get_app_context():
     return app.app_context()
 
 
-# Color codes for terminal output
+# Terminal color utility class for styled output
 class Colors:
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
+    HEADER = "\033[95m"  # Magenta
+    OKBLUE = "\033[94m"  # Blue
+    OKCYAN = "\033[96m"  # Cyan
+    OKGREEN = "\033[92m"  # Green
+    WARNING = "\033[93m"  # Yellow
+    FAIL = "\033[91m"  # Red
+    ENDC = "\033[0m"  # Reset to default
+    BOLD = "\033[1m"  # Bold text
+    UNDERLINE = "\033[4m"  # Underlined text
 
 
 def print_success(message):

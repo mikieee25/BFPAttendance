@@ -1,11 +1,20 @@
+# Personnel management routes for BFP Sorsogon Attendance System
+# Handles CRUD operations for personnel records and face registration
+
+# Flask framework imports
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
+
+# File handling and utilities
 from werkzeug.utils import secure_filename
 import os
 import json
 from datetime import datetime
 
+# Database models
 from models import db, Personnel, User, FaceData, ActivityLog, StationType
+
+# Face recognition service
 from face_recognition.face_service import register_face
 
 personnel_bp = Blueprint("personnel", __name__)
@@ -14,9 +23,14 @@ personnel_bp = Blueprint("personnel", __name__)
 @personnel_bp.route("/")
 @login_required
 def index():
-    # Get personnel based on user role
+    """Display personnel list with station-based access control.
+
+    Admins can see all personnel across stations.
+    Station users see only personnel from their assigned station.
+    """
+    # Get personnel based on user role and station access
     if current_user.is_admin:
-        personnel = Personnel.query.all()
+        personnel = Personnel.query.all()  # Admin sees all personnel
     else:
         personnel = Personnel.query.filter_by(station_id=current_user.id).all()
 
@@ -31,17 +45,19 @@ def index():
 @personnel_bp.route("/register", methods=["GET", "POST"])
 @login_required
 def register():
-    """Personnel registration route - serves the register template with correct data"""
+    """Personnel registration route - legacy redirect to add functionality.
 
+    This route exists for backwards compatibility and redirects to the add route.
+    """
     if request.method == "POST":
-        # This will handle the same logic as the add route
+        # Handle POST requests through the add route logic
         return add()
 
-    # Get stations for dropdown - use actual User records
+    # Get available stations for dropdown (filtered by user permissions)
     if current_user.is_admin:
-        stations = User.query.all()
+        stations = User.query.all()  # Admin can assign to any station
     else:
-        stations = [current_user]
+        stations = [current_user]  # Station users can only assign to their station
 
     return render_template("auth/register.html", stations=stations)
 

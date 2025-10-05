@@ -1,13 +1,16 @@
-#!/usr/bin/env python3
-"""
-Fake Data Generator Script
-Generates 30 fake personnel records for each station using Filipino localization.
-"""
+# Fake Data Generator for BFP Sorsogon Attendance System
+# Generates realistic Filipino personnel records, attendance history, and face data placeholders
+# Uses fil_PH locale for authentic Filipino names and data
+
 import sys
 import random
 from datetime import datetime, timedelta, date
+
+# External libraries
 from faker import Faker
 from werkzeug.security import generate_password_hash
+
+# Management script configuration and utilities
 from config import (
     get_app_context,
     db,
@@ -26,10 +29,11 @@ from config import (
     confirm_action,
 )
 
-# Initialize Faker with Philippine locale
-fake = Faker("fil_PH")  # Filipino Philippines locale
+# Initialize Faker with Philippine locale for authentic Filipino names
+fake = Faker("fil_PH")
 
-# BFP Ranks in hierarchical order
+# BFP (Bureau of Fire Protection) ranks in hierarchical order
+# Used to assign realistic ranks to generated personnel
 BFP_RANKS = [
     "Fire Officer I",
     "Fire Officer II",
@@ -44,7 +48,14 @@ BFP_RANKS = [
 
 
 def create_station_users():
-    """Create user accounts for each station (if they don't exist)"""
+    """Create user accounts for each BFP station if they don't already exist.
+
+    Creates station admin accounts for Central, Talisay, Bacon, and Abuyog stations.
+    These accounts are used to manage personnel at each station.
+
+    Returns:
+        int: Number of new station users created
+    """
     stations_created = 0
 
     for station_type in StationType:
