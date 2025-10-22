@@ -89,10 +89,13 @@ System{% endblock %} {% block content %}
           <i class="fas fa-tools me-2"></i>System Management
         </h6>
       </div>
-      <div class="card-body"  id="systemManagement">
+      <div class="card-body" id="systemManagement">
         <div class="d-grid gap-2">
-          <a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary">
-            <i class="fas fa-users me-2"></i>Manage Users
+          <a
+            href="{{ url_for('auth.manage_stations') }}"
+            class="btn btn-primary"
+          >
+            <i class="fas fa-building me-2"></i>Manage Stations
           </a>
           <a href="{{ url_for('auth.register') }}" class="btn btn-success">
             <i class="fas fa-user-plus me-2"></i>Register New Personnel
@@ -365,3 +368,4 @@ System{% endblock %} {% block content %}
   }
 </script>
 {% endblock %}
+

@@ -13,6 +13,11 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, desc, and_
 import pandas as pd
 from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 
 from models import db, Personnel, Attendance, User, AttendanceStatus, StationType
 
@@ -465,6 +470,75 @@ def export_attendance():
         response = make_response(output.getvalue())
         response.headers["Content-Type"] = "text/csv"
         response.headers["Content-Disposition"] = f"attachment; filename={filename}.csv"
+        return response
+
+    elif format_type == "pdf":
+        # Create PDF file
+        output = BytesIO()
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(
+            output,
+            pagesize=landscape(letter),
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=18,
+        )
+        
+        # Container for PDF elements
+        elements = []
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title_text = f"Attendance Report ({start_date} to {end_date})"
+        title = Paragraph(f"<b>{title_text}</b>", styles['Title'])
+        elements.append(title)
+        elements.append(Spacer(1, 0.3 * inch))
+        
+        # Prepare table data
+        table_data = [["Date", "Personnel", "Rank", "Station", "Time In", "Time Out", "Status", "Hours"]]
+        
+        for record in attendance_data:
+            table_data.append([
+                record.date.strftime("%Y-%m-%d"),
+                record.personnel.full_name,
+                record.personnel.rank if record.personnel.rank else "",
+                record.personnel.station.station_name,
+                record.time_in.strftime("%H:%M") if record.time_in else "",
+                record.time_out.strftime("%H:%M") if record.time_out else "",
+                record.status.value if record.status else "",
+                f"{record.work_hours:.1f}" if record.work_hours > 0 else "",
+            ])
+        
+        # Create table
+        table = Table(table_data, repeatRows=1)
+        
+        # Style the table
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        
+        elements.append(table)
+        
+        # Build PDF
+        doc.build(elements)
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f"attachment; filename={filename}.pdf"
         return response
 
     else:

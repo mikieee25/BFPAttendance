@@ -1,14 +1,16 @@
-{% extends "base.html" %} {% block title %}Manage Users - BFP Sorsogon
+{% extends "base.html" %} {% block title %}Manage Stations - BFP Sorsogon
 Attendance System{% endblock %} {% block content %}
 <div class="row">
   <div class="col-12">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="page-title"><i class="fas fa-users me-2"></i>Manage Users</h1>
+      <h1 class="page-title">
+        <i class="fas fa-building me-2"></i>Manage Stations
+      </h1>
       <div>
-        <a href="{{ url_for('auth.register') }}" class="btn btn-primary">
-          <i class="fas fa-user-plus me-2"></i>Add New Personnel
+        <a href="{{ url_for('personnel.add') }}" class="btn btn-primary">
+          <i class="fas fa-plus me-2"></i>Add New Personnel
         </a>
-        <button class="btn btn-success" onclick="exportUsers()">
+        <button class="btn btn-success" onclick="exportStations()">
           <i class="fas fa-download me-2"></i>Export
         </button>
       </div>
@@ -26,14 +28,14 @@ Attendance System{% endblock %} {% block content %}
             <div
               class="text-xs font-weight-bold text-primary text-uppercase mb-1"
             >
-              Total Personnel
+              Total Stations
             </div>
             <div class="h5 mb-0 font-weight-bold text-gray-800">
               {{ user_stats.total_users }}
             </div>
           </div>
           <div class="col-auto">
-            <i class="fas fa-users fa-2x text-gray-300"></i>
+            <i class="fas fa-building fa-2x text-gray-300"></i>
           </div>
         </div>
       </div>
@@ -48,14 +50,14 @@ Attendance System{% endblock %} {% block content %}
             <div
               class="text-xs font-weight-bold text-success text-uppercase mb-1"
             >
-              Active Users
+              Active Stations
             </div>
             <div class="h5 mb-0 font-weight-bold text-gray-800">
               {{ user_stats.active_users }}
             </div>
           </div>
           <div class="col-auto">
-            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
           </div>
         </div>
       </div>
@@ -111,7 +113,7 @@ Attendance System{% endblock %} {% block content %}
     <div class="card shadow">
       <div class="card-body">
         <div class="row align-items-end">
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label for="filterStation" class="form-label"
               >Filter by Station:</label
             >
@@ -124,24 +126,7 @@ Attendance System{% endblock %} {% block content %}
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-3">
-            <label for="filterRank" class="form-label">Filter by Rank:</label>
-            <select class="form-select" id="filterRank">
-              <option value="">All Ranks</option>
-              <option value="Fire Chief">Fire Chief</option>
-              <option value="Asst. Fire Chief">Asst. Fire Chief</option>
-              <option value="Fire Superintendent">Fire Superintendent</option>
-              <option value="Fire Inspector">Fire Inspector</option>
-              <option value="Senior Fire Officer">Senior Fire Officer</option>
-              <option value="Fire Officer">Fire Officer</option>
-              <option value="Senior Firefighter">Senior Firefighter</option>
-              <option value="Firefighter">Firefighter</option>
-              <option value="Probationary Firefighter">
-                Probationary Firefighter
-              </option>
-            </select>
-          </div>
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label for="filterStatus" class="form-label"
               >Filter by Status:</label
             >
@@ -153,7 +138,7 @@ Attendance System{% endblock %} {% block content %}
               <option value="SUSPENDED">Suspended</option>
             </select>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-4">
             <button
               class="btn btn-outline-secondary w-100"
               onclick="clearFilters()"
@@ -173,7 +158,7 @@ Attendance System{% endblock %} {% block content %}
     <div class="card shadow">
       <div class="card-header py-3">
         <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-list me-2"></i>Personnel List
+          <i class="fas fa-list me-2"></i>Station List
         </h6>
       </div>
       <div class="card-body">
@@ -234,33 +219,17 @@ Attendance System{% endblock %} {% block content %}
                 <td>
                   <div class="btn-group" role="group">
                     <button
-                      class="btn btn-sm btn-outline-primary"
-                      onclick="viewUser({{ user.id }})"
-                      title="View Details"
-                    >
-                      <i class="fas fa-eye"></i>
-                    </button>
-                    <button
                       class="btn btn-sm btn-outline-success"
                       onclick="editUser({{ user.id }})"
-                      title="Edit User"
+                      title="Edit Station"
                     >
                       <i class="fas fa-edit"></i>
                     </button>
                     {% if not user.is_admin or user.id != current_user.id %}
                     <button
-                      class="btn btn-sm btn-outline-warning"
-                      onclick="toggleUserStatus({{ user.id }})"
-                      title="Toggle Status"
-                    >
-                      <i
-                        class="fas fa-{{ 'unlock' if user.status and user.status.name == 'ACTIVE' else 'lock' }}"
-                      ></i>
-                    </button>
-                    <button
                       class="btn btn-sm btn-outline-danger btn-delete-custom"
                       onclick="deleteUser({{ user.id }})"
-                      title="Delete User"
+                      title="Delete Station"
                     >
                       <i class="fas fa-trash"></i>
                     </button>
@@ -345,7 +314,7 @@ Attendance System{% endblock %} {% block content %}
     });
 
     // Add filter functionality
-    $("#filterStation, #filterRank, #filterStatus").on("change", function () {
+    $("#filterStation, #filterStatus").on("change", function () {
       applyFilters(table);
     });
   });
@@ -353,7 +322,6 @@ Attendance System{% endblock %} {% block content %}
   // Apply filters
   function applyFilters(table) {
     const station = $("#filterStation").val();
-    const rank = $("#filterRank").val();
     const status = $("#filterStatus").val();
 
     // Clear previous search
@@ -361,19 +329,16 @@ Attendance System{% endblock %} {% block content %}
 
     // Apply column-specific filters
     if (station) {
-      table.column(4).search(station).draw();
-    }
-    if (rank) {
-      table.column(2).search(rank).draw();
+      table.column(2).search(station).draw();
     }
     if (status) {
-      table.column(7).search(status).draw();
+      table.column(5).search(status).draw();
     }
   }
 
   // Clear all filters
   function clearFilters() {
-    $("#filterStation, #filterRank, #filterStatus").val("");
+    $("#filterStation, #filterStatus").val("");
     $("#usersTable").DataTable().search("").columns().search("").draw();
   }
 
@@ -475,16 +440,15 @@ Attendance System{% endblock %} {% block content %}
     }
   }
 
-  // Export users
-  function exportUsers() {
+  // Export stations
+  function exportStations() {
     const filters = {
       station: $("#filterStation").val(),
-      rank: $("#filterRank").val(),
       status: $("#filterStatus").val(),
     };
 
     const queryString = new URLSearchParams(filters).toString();
-    window.open(`/auth/export-users?${queryString}`, "_blank");
+    window.open(`/auth/export-stations?${queryString}`, "_blank");
   }
 
   // Show alert function
@@ -500,11 +464,28 @@ Attendance System{% endblock %} {% block content %}
         </div>
     `;
 
-    $(".row").first().before(alertHtml);
+    // Use jQuery if available, otherwise use vanilla JavaScript
+    if (typeof $ !== "undefined") {
+      $(".row").first().before(alertHtml);
+      setTimeout(() => {
+        $(".alert").alert("close");
+      }, 5000);
+    } else {
+      // Fallback to vanilla JavaScript
+      const container = document.querySelector(".container-fluid");
+      if (container) {
+        container.insertAdjacentHTML("afterbegin", alertHtml);
+      }
 
-    setTimeout(() => {
-      $(".alert").alert("close");
-    }, 5000);
+      setTimeout(() => {
+        const alerts = document.querySelectorAll(".alert");
+        alerts.forEach((alert) => {
+          const bsAlert = new bootstrap.Alert(alert);
+          if (bsAlert) bsAlert.close();
+        });
+      }, 5000);
+    }
   }
 </script>
 {% endblock %}
+

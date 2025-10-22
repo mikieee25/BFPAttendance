@@ -149,10 +149,22 @@ System{% endblock %} {% block content %}
         <p class="text-muted">Export attendance data in various formats.</p>
         <div class="d-grid gap-2">
           <a
-            href="{{ url_for('reports.export_attendance') }}"
+            href="{{ url_for('reports.export_attendance', format='xlsx') }}"
+            class="btn btn-primary"
+          >
+            <i class="fas fa-file-excel me-2"></i>Export Attendance to Excel
+          </a>
+          <a
+            href="{{ url_for('reports.export_attendance', format='pdf') }}"
+            class="btn btn-info"
+          >
+            <i class="fas fa-file-pdf me-2"></i>Export Attendance to PDF
+          </a>
+          <a
+            href="{{ url_for('reports.export_attendance', format='csv') }}"
             class="btn btn-success"
           >
-            <i class="fas fa-download me-2"></i>Export Attendance
+            <i class="fas fa-file-csv me-2"></i>Export Attendance to CSV
           </a>
         </div>
       </div>
@@ -250,3 +262,4 @@ System{% endblock %} {% block content %}
   });
 </script>
 {% endblock %}
+

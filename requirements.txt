@@ -23,6 +23,7 @@ Pillow
 matplotlib
 pandas
 openpyxl
+reportlab
 
 # Utilities
 python-dotenv
@@ -40,3 +41,4 @@ waitress
 pytest
 black
 flake8
+faker
