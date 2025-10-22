@@ -30,13 +30,12 @@ yolo_model = None
 
 
 def get_yolo_model():
-    """Initialize and return the YOLO face detection model.
+    """Load and return the YOLO face detection model.
 
-    Loads the YOLOv11 model for face detection with CPU/GPU configuration.
-    Uses global variable to avoid reloading the model on every call.
+    Uses a global variable to avoid reloading the model each time.
 
     Returns:
-        YOLO: Configured YOLO model instance
+      YOLO model instance
     """
     global yolo_model
     if yolo_model is None:
