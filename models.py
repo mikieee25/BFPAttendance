@@ -103,9 +103,14 @@ class Personnel(db.Model):
     attendances = db.relationship(
         "Attendance", backref="personnel", lazy=True, cascade="all, delete-orphan"
     )
-    face_data = db.relationship("FaceData", backref="personnel", lazy=True)
+    face_data = db.relationship(
+        "FaceData", backref="personnel", lazy=True, cascade="all, delete-orphan"
+    )
     pending_attendance = db.relationship(
-        "PendingAttendance", backref="personnel", lazy=True
+        "PendingAttendance",
+        backref="personnel",
+        lazy=True,
+        cascade="all, delete-orphan",
     )
 
     @property

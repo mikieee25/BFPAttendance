@@ -1,0 +1,158 @@
+{% extends "base.html" %} {% block title %}Manual Attendance Entry{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">Manual Attendance Entry</h1>
+    <a
+      href="{{ url_for('attendance.index') }}"
+      class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm"
+    >
+      <i class="fas fa-arrow-left fa-sm text-white-50"></i> Back to Attendance
+    </a>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow mb-4">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold text-primary">
+            Add Attendance Record
+          </h6>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('attendance.manual') }}">
+            <div class="form-group">
+              <label for="personnel_id"
+                >Personnel <span class="text-danger">*</span></label
+              >
+              <select
+                class="form-control"
+                id="personnel_id"
+                name="personnel_id"
+                required
+              >
+                <option value="">Select Personnel</option>
+                {% for person in personnel_list %}
+                <option value="{{ person.id }}">
+                  {{ person.full_name }} - {{ person.rank }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="date">Date <span class="text-danger">*</span></label>
+              <input
+                type="date"
+                class="form-control"
+                id="date"
+                name="date"
+                value="{{ today }}"
+                max="{{ today }}"
+                required
+              />
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="time_in">Time In</label>
+                  <input
+                    type="time"
+                    class="form-control"
+                    id="time_in"
+                    name="time_in"
+                  />
+                  <small class="form-text text-muted"
+                    >Leave empty if not applicable</small
+                  >
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="time_out">Time Out</label>
+                  <input
+                    type="time"
+                    class="form-control"
+                    id="time_out"
+                    name="time_out"
+                  />
+                  <small class="form-text text-muted"
+                    >Leave empty if not applicable</small
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="status"
+                >Attendance Status <span class="text-danger">*</span></label
+              >
+              <select class="form-control" id="status" name="status" required>
+                <option value="">Select Status</option>
+                {% for status in attendance_statuses %}
+                <option value="{{ status.value }}">{{ status.value }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="notes">Notes</label>
+              <textarea
+                class="form-control"
+                id="notes"
+                name="notes"
+                rows="3"
+                placeholder="Additional notes or remarks..."
+              ></textarea>
+            </div>
+
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle"></i>
+              <strong>Note:</strong> Manual attendance entries are automatically
+              approved and marked as non-auto-captured.
+            </div>
+
+            <div class="form-group mb-0">
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Submit Attendance
+              </button>
+              <a
+                href="{{ url_for('attendance.index') }}"
+                class="btn btn-secondary"
+              >
+                <i class="fas fa-times"></i> Cancel
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Add Select2 for better dropdown UX if available
+    if (typeof $.fn.select2 !== "undefined") {
+      $("#personnel_id").select2({
+        placeholder: "Search for personnel...",
+        allowClear: true,
+      });
+    }
+
+    // Validate time_out is after time_in
+    const timeInInput = document.getElementById("time_in");
+    const timeOutInput = document.getElementById("time_out");
+
+    timeOutInput.addEventListener("change", function () {
+      if (timeInInput.value && timeOutInput.value) {
+        if (timeOutInput.value <= timeInInput.value) {
+          alert("Time Out must be after Time In");
+          timeOutInput.value = "";
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

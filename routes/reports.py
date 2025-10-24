@@ -59,6 +59,43 @@ def index():
         Attendance.date >= current_month_start
     ).count()
 
+    # Calculate weekly attendance rates for this month's trend
+    weekly_data = []
+    if total_personnel > 0:
+        # Divide the month into 4 weeks
+        for week_num in range(4):
+            week_start = current_month_start + timedelta(days=week_num * 7)
+            week_end = week_start + timedelta(days=6)
+
+            # Don't go beyond today
+            if week_end > today:
+                week_end = today
+
+            # Skip if week hasn't started yet
+            if week_start > today:
+                continue
+
+            # Count present and late for this week
+            week_present = attendance_query.filter(
+                Attendance.date >= week_start,
+                Attendance.date <= week_end,
+                Attendance.status.in_(
+                    [AttendanceStatus.PRESENT, AttendanceStatus.LATE]
+                ),
+            ).count()
+
+            # Calculate expected attendance for this week
+            days_in_week = (week_end - week_start).days + 1
+            expected = total_personnel * days_in_week
+
+            # Calculate attendance rate
+            rate = round((week_present / expected * 100) if expected > 0 else 0, 1)
+            weekly_data.append(rate)
+
+    # Ensure we have at least some data (fill with 0 if no data)
+    while len(weekly_data) < 4:
+        weekly_data.append(0)
+
     stats = {
         "total_personnel": total_personnel,
         "today_attendance": today_attendance,
@@ -66,6 +103,7 @@ def index():
         "today_late": today_late,
         "today_absent": today_absent,
         "month_attendance": month_attendance,
+        "weekly_rates": weekly_data,
     }
 
     return render_template("reports/index.html", stats=stats)
@@ -475,7 +513,7 @@ def export_attendance():
     elif format_type == "pdf":
         # Create PDF file
         output = BytesIO()
-        
+
         # Create PDF document
         doc = SimpleDocTemplate(
             output,
@@ -485,57 +523,79 @@ def export_attendance():
             topMargin=30,
             bottomMargin=18,
         )
-        
+
         # Container for PDF elements
         elements = []
-        
+
         # Styles
         styles = getSampleStyleSheet()
-        
+
         # Title
         title_text = f"Attendance Report ({start_date} to {end_date})"
-        title = Paragraph(f"<b>{title_text}</b>", styles['Title'])
+        title = Paragraph(f"<b>{title_text}</b>", styles["Title"])
         elements.append(title)
         elements.append(Spacer(1, 0.3 * inch))
-        
+
         # Prepare table data
-        table_data = [["Date", "Personnel", "Rank", "Station", "Time In", "Time Out", "Status", "Hours"]]
-        
+        table_data = [
+            [
+                "Date",
+                "Personnel",
+                "Rank",
+                "Station",
+                "Time In",
+                "Time Out",
+                "Status",
+                "Hours",
+            ]
+        ]
+
         for record in attendance_data:
-            table_data.append([
-                record.date.strftime("%Y-%m-%d"),
-                record.personnel.full_name,
-                record.personnel.rank if record.personnel.rank else "",
-                record.personnel.station.station_name,
-                record.time_in.strftime("%H:%M") if record.time_in else "",
-                record.time_out.strftime("%H:%M") if record.time_out else "",
-                record.status.value if record.status else "",
-                f"{record.work_hours:.1f}" if record.work_hours > 0 else "",
-            ])
-        
+            table_data.append(
+                [
+                    record.date.strftime("%Y-%m-%d"),
+                    record.personnel.full_name,
+                    record.personnel.rank if record.personnel.rank else "",
+                    record.personnel.station.station_name,
+                    record.time_in.strftime("%H:%M") if record.time_in else "",
+                    record.time_out.strftime("%H:%M") if record.time_out else "",
+                    record.status.value if record.status else "",
+                    f"{record.work_hours:.1f}" if record.work_hours > 0 else "",
+                ]
+            )
+
         # Create table
         table = Table(table_data, repeatRows=1)
-        
+
         # Style the table
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                    ("FONTSIZE", (0, 1), (-1, -1), 8),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.lightgrey],
+                    ),
+                ]
+            )
+        )
+
         elements.append(table)
-        
+
         # Build PDF
         doc.build(elements)
         output.seek(0)
-        
+
         response = make_response(output.read())
         response.headers["Content-Type"] = "application/pdf"
         response.headers["Content-Disposition"] = f"attachment; filename={filename}.pdf"

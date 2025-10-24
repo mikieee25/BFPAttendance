@@ -53,9 +53,11 @@ Attendance System{% endblock %} {% block content %}
               Highest Attendance
             </div>
             <div class="h6 mb-0 font-weight-bold text-gray-800">
-              {% set max_month = months_data | selectattr('attendance_rate') |
+              {% if months_data and months_data | length > 0 %} {% set max_month
+              = months_data | selectattr('attendance_rate') |
               max(attribute='attendance_rate') %} {{ max_month.month }} ({{
-              "%.1f"|format(max_month.attendance_rate) }}%)
+              "%.1f"|format(max_month.attendance_rate) }}%) {% else %} No Data
+              Available {% endif %}
             </div>
           </div>
           <div class="col-auto">
@@ -77,8 +79,10 @@ Attendance System{% endblock %} {% block content %}
               Average Attendance
             </div>
             <div class="h6 mb-0 font-weight-bold text-gray-800">
-              {% set avg_rate = (months_data | sum(attribute='attendance_rate'))
-              / (months_data | length) %} {{ "%.1f"|format(avg_rate) }}%
+              {% if months_data and months_data | length > 0 %} {% set avg_rate
+              = (months_data | sum(attribute='attendance_rate')) / (months_data
+              | length) %} {{ "%.1f"|format(avg_rate) }}% {% else %} No Data
+              Available {% endif %}
             </div>
           </div>
           <div class="col-auto">
@@ -98,7 +102,8 @@ Attendance System{% endblock %} {% block content %}
               Current Month
             </div>
             <div class="h6 mb-0 font-weight-bold text-gray-800">
-              {{ months_data[-1].month }}
+              {% if months_data and months_data | length > 0 %} {{
+              months_data[-1].month }} {% else %} No Data Available {% endif %}
             </div>
           </div>
           <div class="col-auto">
@@ -190,7 +195,8 @@ Attendance System{% endblock %} {% block content %}
               </tr>
             </thead>
             <tbody>
-              {% for month in months_data %}
+              {% if months_data and months_data | length > 0 %} {% for month in
+              months_data %}
               <tr>
                 <td class="fw-bold">{{ month.month }}</td>
                 <td>
@@ -253,7 +259,14 @@ Attendance System{% endblock %} {% block content %}
                   {% endif %}
                 </td>
               </tr>
-              {% endfor %}
+              {% endfor %} {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                  <i class="fas fa-info-circle me-2"></i>No attendance data
+                  available yet.
+                </td>
+              </tr>
+              {% endif %}
             </tbody>
           </table>
         </div>
@@ -275,6 +288,7 @@ Attendance System{% endblock %} {% block content %}
           ]
       });
 
+      {% if months_data and months_data | length > 0 %}
       const monthLabels = [
           {% for month in months_data %}
           '{{ month.month }}',
@@ -304,6 +318,14 @@ Attendance System{% endblock %} {% block content %}
           {{ month.late }},
           {% endfor %}
       ];
+      {% else %}
+      // No data available, use empty arrays
+      const monthLabels = ['No Data'];
+      const attendanceRates = [0];
+      const punctualityRates = [0];
+      const presentData = [0];
+      const lateData = [0];
+      {% endif %}
 
       // Attendance Rate Trend Chart
       const attendanceRateConfig = {
@@ -442,3 +464,4 @@ Attendance System{% endblock %} {% block content %}
   }
 </script>
 {% endblock %}
+

@@ -2,7 +2,16 @@
 # Handles CRUD operations for personnel records and face registration
 
 # Flask framework imports
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    jsonify,
+    redirect,
+    url_for,
+    flash,
+    current_app,
+)
 from flask_login import login_required, current_user
 
 # File handling and utilities
@@ -66,109 +75,83 @@ def register():
 @login_required
 def add():
     if request.method == "POST":
-        # Check if it's an AJAX request expecting JSON response
-        if (
-            request.headers.get("Content-Type") == "application/json"
-            or request.args.get("api") == "true"
-        ):
-            try:
-                data = (
-                    request.get_json()
-                    if request.headers.get("Content-Type") == "application/json"
-                    else request.form
-                )
+        try:
+            # Get data from form (works for both FormData and regular form submissions)
+            first_name = request.form.get("first_name", "").strip()
+            last_name = request.form.get("last_name", "").strip()
+            rank = request.form.get("rank", "").strip()
+            station_id = request.form.get("station_id", "").strip()
 
-                first_name = data.get("first_name", "").strip()
-                last_name = data.get("last_name", "").strip()
-                middle_name = data.get("middle_name", "").strip() or None
-                suffix = data.get("suffix", "").strip() or None
-                rank = data.get("rank", "").strip()
-                station_id_or_type = data.get("station_id", "").strip()
-                hire_date_str = data.get("hire_date", "").strip()
-                email = data.get("email", "").strip()
-                phone = data.get("phone", "").strip() or None
-                address = data.get("address", "").strip() or None
-                status = data.get("status", "ACTIVE").strip()
-                shift_schedule = data.get("shift_schedule", "DAY_SHIFT").strip()
-                notes = data.get("notes", "").strip() or None
-
-                # Handle station_id - could be integer ID or station type string
-                station_id = None
-                try:
-                    # First try to parse as integer
-                    station_id = int(station_id_or_type)
-                except ValueError:
-                    # It's a station type string, find the corresponding user/station
-                    station_type_map = {
-                        "CENTRAL": StationType.CENTRAL,
-                        "TALISAY": StationType.TALISAY,
-                        "BACON": StationType.BACON,
-                        "ABUYOG": StationType.ABUYOG,
-                    }
-                    if station_id_or_type in station_type_map:
-                        station_user = User.query.filter_by(
-                            station_type=station_type_map[station_id_or_type]
-                        ).first()
-                        if station_user:
-                            station_id = station_user.id
-                        else:
-                            return jsonify(
-                                {
-                                    "success": False,
-                                    "error": f"No user found for station type {station_id_or_type}",
-                                }
-                            )
-                    else:
-                        return jsonify(
-                            {
-                                "success": False,
-                                "error": f"Invalid station type: {station_id_or_type}",
-                            }
-                        )
-
-                if not station_id:
-                    return jsonify(
-                        {"success": False, "error": "Invalid station selection"}
-                    )
-
-                # Validation
-                if not all([first_name, last_name, rank]):
+            # Validation
+            if not all([first_name, last_name, rank, station_id]):
+                # Check if AJAX request (XMLHttpRequest header)
+                if (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.accept_mimetypes.accept_json
+                ):
                     return jsonify(
                         {
                             "success": False,
-                            "error": "Please fill in all required fields",
+                            "error": "Please fill in all required fields (First Name, Last Name, Rank, Station)",
                         }
                     )
+                flash("Please fill in all required fields", "error")
+                return redirect(url_for("personnel.add"))
 
-                # Validate station access
-                if not current_user.is_admin and station_id != current_user.id:
+            # Convert station_id to integer
+            try:
+                station_id = int(station_id)
+            except ValueError:
+                if (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.accept_mimetypes.accept_json
+                ):
+                    return jsonify(
+                        {"success": False, "error": "Invalid station selection"}
+                    )
+                flash("Invalid station selection", "error")
+                return redirect(url_for("personnel.add"))
+
+            # Validate station access
+            if not current_user.is_admin and station_id != current_user.id:
+                if (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.accept_mimetypes.accept_json
+                ):
                     return jsonify(
                         {
                             "success": False,
                             "error": "You can only add personnel to your own station",
                         }
                     )
+                flash("You can only add personnel to your own station", "error")
+                return redirect(url_for("personnel.index"))
 
-                # Create new personnel
-                new_personnel = Personnel(
-                    first_name=first_name,
-                    last_name=last_name,
-                    rank=rank,
-                    station_id=station_id,
-                )
+            # Create new personnel
+            new_personnel = Personnel(
+                first_name=first_name,
+                last_name=last_name,
+                rank=rank,
+                station_id=station_id,
+            )
 
-                db.session.add(new_personnel)
-                db.session.flush()  # Get the ID
+            db.session.add(new_personnel)
+            db.session.flush()  # Get the ID
 
-                # Log activity
-                activity = ActivityLog(
-                    user_id=current_user.id,
-                    title="Personnel Added",
-                    description=f"Personnel {new_personnel.full_name} added to station {station_id}",
-                )
-                db.session.add(activity)
-                db.session.commit()
+            # Log activity
+            activity = ActivityLog(
+                user_id=current_user.id,
+                title="Personnel Added",
+                description=f"Personnel {new_personnel.full_name} added to {new_personnel.station.station_name}",
+            )
+            db.session.add(activity)
+            db.session.commit()
 
+            # Check if AJAX request
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.accept_mimetypes.accept_json
+            ):
                 return jsonify(
                     {
                         "success": True,
@@ -177,40 +160,19 @@ def add():
                     }
                 )
 
-            except Exception as e:
-                db.session.rollback()
-                return jsonify({"success": False, "error": str(e)})
-
-        # Regular form submission (non-AJAX)
-        first_name = request.form["first_name"]
-        last_name = request.form["last_name"]
-        rank = request.form["rank"]
-        station_id = int(request.form["station_id"])
-
-        # Validate station access
-        if not current_user.is_admin and station_id != current_user.id:
-            flash("You can only add personnel to your own station", "error")
+            flash("Personnel added successfully", "success")
             return redirect(url_for("personnel.index"))
 
-        # Create new personnel
-        new_personnel = Personnel(
-            first_name=first_name, last_name=last_name, rank=rank, station_id=station_id
-        )
-
-        db.session.add(new_personnel)
-        db.session.flush()  # Get the ID
-
-        # Log activity
-        activity = ActivityLog(
-            user_id=current_user.id,
-            title="Personnel Added",
-            description=f"Personnel {new_personnel.full_name} added to {new_personnel.station.station_name}",
-        )
-        db.session.add(activity)
-        db.session.commit()
-
-        flash("Personnel added successfully", "success")
-        return redirect(url_for("personnel.index"))
+        except Exception as e:
+            db.session.rollback()
+            # Check if AJAX request
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.accept_mimetypes.accept_json
+            ):
+                return jsonify({"success": False, "error": str(e)})
+            flash(f"Error adding personnel: {str(e)}", "error")
+            return redirect(url_for("personnel.add"))
 
     # Get stations for dropdown
     if current_user.is_admin:
@@ -273,21 +235,47 @@ def delete(personnel_id):
         flash("You can only delete personnel from your own station", "error")
         return redirect(url_for("personnel.index"))
 
-    name = personnel.full_name
+    try:
+        name = personnel.full_name
+        station_name = personnel.station.station_name
 
-    # Log activity before deletion
-    activity = ActivityLog(
-        user_id=current_user.id,
-        title="Personnel Deleted",
-        description=f"Personnel {name} deleted from {personnel.station.station_name}",
-    )
-    db.session.add(activity)
+        # Delete related face data first
+        FaceData.query.filter_by(personnel_id=personnel_id).delete()
 
-    db.session.delete(personnel)
-    db.session.commit()
+        # Delete face image files if they exist
+        folder_name = f"{personnel.last_name}_{personnel.first_name}".replace(" ", "")
+        folder_path = os.path.join(
+            current_app.config.get("UPLOAD_FOLDER", "static/images/face_data"),
+            folder_name,
+        )
 
-    flash(f"Personnel {name} deleted successfully", "success")
-    return redirect(url_for("personnel.index"))
+        if os.path.exists(folder_path):
+            import shutil
+
+            try:
+                shutil.rmtree(folder_path)
+            except Exception as e:
+                print(f"Warning: Could not delete folder {folder_path}: {e}")
+
+        # Log activity before deletion
+        activity = ActivityLog(
+            user_id=current_user.id,
+            title="Personnel Deleted",
+            description=f"Personnel {name} deleted from {station_name}",
+        )
+        db.session.add(activity)
+
+        # Delete the personnel record
+        db.session.delete(personnel)
+        db.session.commit()
+
+        flash(f"Personnel {name} deleted successfully", "success")
+        return redirect(url_for("personnel.index"))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting personnel: {str(e)}", "error")
+        return redirect(url_for("personnel.index"))
 
 
 @personnel_bp.route("/view/<int:personnel_id>")
@@ -339,8 +327,28 @@ def api_register_face(personnel_id):
         return jsonify({"success": False, "error": "Access denied"}), 403
 
     try:
-        data = request.get_json()
-        images = data.get("images", [])
+        images = []
+
+        # Check if request contains JSON data (base64 images)
+        if request.is_json:
+            data = request.get_json()
+            images = data.get("images", [])
+        # Check if request contains FormData with image file
+        elif "image" in request.files:
+            import base64
+            from io import BytesIO
+
+            # Get the uploaded file
+            image_file = request.files["image"]
+
+            # Read the image data
+            image_data = image_file.read()
+
+            # Convert to base64
+            base64_image = base64.b64encode(image_data).decode("utf-8")
+            images = [base64_image]
+        else:
+            return jsonify({"success": False, "error": "No images provided"}), 400
 
         if not images:
             return jsonify({"success": False, "error": "No images provided"}), 400
@@ -361,6 +369,9 @@ def api_register_face(personnel_id):
         return jsonify(result)
 
     except Exception as e:
+        import traceback
+
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

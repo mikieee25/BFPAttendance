@@ -199,6 +199,9 @@ Attendance System{% endblock %} {% block content %}
       try {
         const response = await fetch('{{ url_for("personnel.add") }}', {
           method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
           body: formData,
         });
 
@@ -233,3 +236,4 @@ Attendance System{% endblock %} {% block content %}
 </script>
 
 {% endblock %}
+

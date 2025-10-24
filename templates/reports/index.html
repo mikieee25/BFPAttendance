@@ -225,7 +225,7 @@ System{% endblock %} {% block content %}
       }
   });
 
-  // Sample monthly trend chart
+  // This month's weekly trend chart with real data
   const monthCtx = document.getElementById('monthChart').getContext('2d');
   const monthChart = new Chart(monthCtx, {
       type: 'line',
@@ -233,7 +233,12 @@ System{% endblock %} {% block content %}
           labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
           datasets: [{
               label: 'Attendance Rate',
-              data: [85, 90, 88, 92],
+              data: [
+                  {{ stats.weekly_rates[0] }},
+                  {{ stats.weekly_rates[1] }},
+                  {{ stats.weekly_rates[2] }},
+                  {{ stats.weekly_rates[3] }}
+              ],
               borderColor: '#4e73df',
               backgroundColor: 'rgba(78, 115, 223, 0.1)',
               tension: 0.4,
