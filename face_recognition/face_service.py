@@ -8,6 +8,7 @@ import json
 import base64
 import logging
 from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Tuple, Any
 
 # Computer vision and machine learning libraries
 import cv2
@@ -28,54 +29,127 @@ logger = logging.getLogger(__name__)
 # Global model instance
 yolo_model = None
 
+# Face database cache to avoid repeated database queries
+_face_db_cache: Optional[Dict[int, Dict[str, Any]]] = None
+_face_db_cache_time: Optional[datetime] = None
+_face_db_cache_ttl: int = 300  # Cache TTL in seconds (5 minutes)
 
-def get_yolo_model():
+# Configuration constants
+MAX_IMAGE_SIZE_MB: int = 10
+MAX_IMAGE_SIZE_BYTES: int = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+
+def get_yolo_model() -> YOLO:
     """Load and return the YOLO face detection model.
 
-    Uses a global variable to avoid reloading the model each time.
+    Uses Flask app context to store model, avoiding global variables and memory leaks.
+    Falls back to global variable if app context is not available.
 
     Returns:
-      YOLO model instance
+        YOLO: YOLO model instance for face detection
     """
     global yolo_model
-    if yolo_model is None:
-        model_path = current_app.config["YOLO_MODEL_PATH"]
-        try:
-            # Force CPU usage if configured
+
+    # Try to use app context if available
+    try:
+        if not hasattr(current_app, "yolo_model") or current_app.yolo_model is None:
+            model_path = current_app.config["YOLO_MODEL_PATH"]
             device = current_app.config.get("TORCH_DEVICE", "cpu")
 
-            # Print debug info for device configuration
             logger.info(f"PyTorch version: {torch.__version__}")
             logger.info(f"CUDA available: {torch.cuda.is_available()}")
-            logger.info(f"Current PyTorch device: {device}")
+            logger.info(f"Loading YOLO model on device: {device}")
 
             # Ensure PyTorch uses the configured device
             if device == "cpu":
                 torch.set_default_device("cpu")
 
             # Initialize model with specific device setting
-            yolo_model = YOLO(model_path)
-            yolo_model.to(device)
-            logger.info(f"YOLO model loaded on {device}")
-        except Exception as e:
-            logger.error(f"Error loading YOLO model: {e}")
-            # Fallback to default initialization with CPU
+            model = YOLO(model_path)
+            model.to(device)
+
+            # Store in app context
+            current_app.yolo_model = model
+            logger.info(f"YOLO model loaded successfully on {device}")
+
+        return current_app.yolo_model
+
+    except RuntimeError:
+        # No app context available, use global variable
+        if yolo_model is None:
+            logger.warning("No app context available, using global YOLO model")
+            # This should only happen during testing or initialization
+            model_path = os.environ.get(
+                "YOLO_MODEL_PATH", "face_recognition/yolov11n-face.pt"
+            )
             yolo_model = YOLO(model_path)
             yolo_model.cpu()
-    return yolo_model
+
+        return yolo_model
 
 
-def extract_face_embeddings(image_path):
+def validate_base64_image(base64_image: str) -> Tuple[bool, Optional[str]]:
+    """Validate base64 image data before processing.
+
+    Checks for:
+    - Size limits (10MB max)
+    - Valid base64 format
+    - Valid image format
+
+    Args:
+        base64_image: Base64 encoded image string
+
+    Returns:
+        Tuple of (is_valid, error_message). error_message is None if valid.
+    """
+    try:
+        # Remove data URL header if present
+        if "," in base64_image:
+            base64_image = base64_image.split(",")[1]
+
+        # Check if base64 string is valid
+        try:
+            image_bytes = base64.b64decode(base64_image, validate=True)
+        except Exception as e:
+            return False, f"Invalid base64 format: {str(e)}"
+
+        # Check size limit
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            size_mb = len(image_bytes) / (1024 * 1024)
+            return (
+                False,
+                f"Image too large: {size_mb:.2f}MB (max {MAX_IMAGE_SIZE_MB}MB)",
+            )
+
+        # Verify it's a valid image format
+        try:
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is None:
+                return False, "Invalid image format"
+        except Exception as e:
+            return False, f"Cannot decode image: {str(e)}"
+
+        return True, None
+
+    except Exception as e:
+        logger.error(f"Error validating base64 image: {e}")
+        return False, f"Validation error: {str(e)}"
+
+
+def extract_face_embeddings(
+    image_path: str,
+) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
     """Extract face embeddings from an image file.
 
     Detects faces using YOLO model and creates a normalized embedding vector
     for face recognition comparison.
 
     Args:
-        image_path (str): Path to the image file
+        image_path: Path to the image file
 
     Returns:
-        tuple: (embedding_list, metadata_dict) or (None, None) if no face detected
+        Tuple of (embedding_list, metadata_dict) or (None, None) if no face detected
     """
     try:
         model = get_yolo_model()
@@ -131,16 +205,18 @@ def extract_face_embeddings(image_path):
         return None, None
 
 
-def compare_embeddings(emb1, emb2, threshold=0.75):
+def compare_embeddings(
+    emb1: List[float], emb2: List[float], threshold: float = 0.75
+) -> Tuple[float, bool]:
     """Compare two face embeddings using cosine similarity.
 
     Args:
-        emb1 (list): First face embedding
-        emb2 (list): Second face embedding
-        threshold (float): Similarity threshold for match determination
+        emb1: First face embedding
+        emb2: Second face embedding
+        threshold: Similarity threshold for match determination
 
     Returns:
-        tuple: (similarity_score, is_match_boolean)
+        Tuple of (similarity_score, is_match_boolean)
     """
     try:
         # Convert to flattened numpy arrays
@@ -175,15 +251,57 @@ def compare_embeddings(emb1, emb2, threshold=0.75):
         return 0.0, False
 
 
-def load_face_database(station_id=None):
+def clear_face_database_cache() -> None:
+    """Clear the face database cache.
+
+    Should be called after:
+    - New personnel registered
+    - Face data added/removed
+    - Personnel deleted
+    """
+    global _face_db_cache, _face_db_cache_time
+    _face_db_cache = None
+    _face_db_cache_time = None
+    logger.info("Face database cache cleared")
+
+
+def load_face_database(
+    station_id: Optional[int] = None, force_refresh: bool = False
+) -> Dict[int, Dict[str, Any]]:
     """Load all face embeddings from database for recognition.
 
+    Uses caching to avoid repeated database queries. Cache expires after 5 minutes.
+
     Args:
-        station_id (int, optional): Limit to specific station. None for all stations.
+        station_id: Limit to specific station. None for all stations.
+        force_refresh: Force reload from database, ignoring cache
 
     Returns:
-        dict: Dictionary mapping personnel_id to their face data and embeddings
+        Dictionary mapping personnel_id to their face data and embeddings
     """
+    global _face_db_cache, _face_db_cache_time
+
+    # Check if we can use cached data
+    if (
+        not force_refresh
+        and _face_db_cache is not None
+        and _face_db_cache_time is not None
+    ):
+        cache_age = (datetime.now() - _face_db_cache_time).total_seconds()
+        if cache_age < _face_db_cache_ttl:
+            logger.debug(f"Using cached face database (age: {cache_age:.1f}s)")
+            # If station_id filter is needed, apply it to cached data
+            if station_id is not None:
+                return {
+                    k: v
+                    for k, v in _face_db_cache.items()
+                    if Personnel.query.get(k)
+                    and Personnel.query.get(k).station_id == station_id
+                }
+            return _face_db_cache.copy()
+
+    # Load from database
+    logger.info("Loading face database from database")
     try:
         face_database = {}
 
@@ -216,6 +334,12 @@ def load_face_database(station_id=None):
                 logger.error(f"Error processing face data entry {entry.id}: {e}")
                 continue
 
+        # Update cache (only if no station filter, to cache all data)
+        if station_id is None:
+            _face_db_cache = face_database.copy()
+            _face_db_cache_time = datetime.now()
+            logger.info(f"Face database cached ({len(face_database)} personnel)")
+
         return face_database
 
     except Exception as e:
@@ -223,16 +347,20 @@ def load_face_database(station_id=None):
         return {}
 
 
-def recognize_face(face_embedding, face_database, threshold=None):
+def recognize_face(
+    face_embedding: List[float],
+    face_database: Dict[int, Dict[str, Any]],
+    threshold: Optional[float] = None,
+) -> Tuple[Optional[int], float]:
     """Identify a person by comparing face embedding against database.
 
     Args:
-        face_embedding (list): Face embedding to identify
-        face_database (dict): Database of known face embeddings
-        threshold (float, optional): Recognition threshold. Uses config default if None.
+        face_embedding: Face embedding to identify
+        face_database: Database of known face embeddings
+        threshold: Recognition threshold. Uses config default if None.
 
     Returns:
-        tuple: (personnel_id, confidence_score) or (None, 0) if no match
+        Tuple of (personnel_id, confidence_score) or (None, 0) if no match
     """
     try:
         if face_embedding is None or not face_database:
@@ -270,18 +398,21 @@ def recognize_face(face_embedding, face_database, threshold=None):
         return None, 0
 
 
-def process_attendance(personnel_id, confidence, base64_image=None):
+def process_attendance(
+    personnel_id: int, confidence: float, base64_image: Optional[str] = None
+) -> Dict[str, Any]:
     """Process attendance record for identified personnel.
 
     Handles time-in/time-out logic, cooldown periods, and duplicate prevention.
+    Uses database locking to prevent race conditions.
 
     Args:
-        personnel_id (int): ID of identified personnel
-        confidence (float): Face recognition confidence score
-        base64_image (str, optional): Base64 encoded image for record keeping
+        personnel_id: ID of identified personnel
+        confidence: Face recognition confidence score
+        base64_image: Base64 encoded image for record keeping
 
     Returns:
-        dict: Result with success status, action taken, and relevant data
+        Dictionary with success status, action taken, and relevant data
     """
     try:
         # Get personnel data
@@ -297,63 +428,24 @@ def process_attendance(personnel_id, confidence, base64_image=None):
         cooldown_seconds = current_app.config.get("ATTENDANCE_COOLDOWN", 60)
         cooldown_period = timedelta(seconds=cooldown_seconds)
 
-        # Check for any recent attendance requests (time-in or time-out) across all records
-        # This prevents rapid-fire attendance records even if no record exists for today
-        recent_attendance = Attendance.query.filter(
-            Attendance.personnel_id == personnel_id,
-            or_(
-                # Check for recent time_in
-                Attendance.time_in >= current_time - cooldown_period,
-                # Check for recent time_out
-                Attendance.time_out >= current_time - cooldown_period,
-            ),
-        ).first()
+        # Use database locking to prevent race conditions
+        # with_for_update() locks the row until transaction completes
+        attendance = (
+            Attendance.query.filter_by(personnel_id=personnel_id, date=today)
+            .with_for_update()
+            .first()
+        )
 
-        if recent_attendance:
-            # Someone is trying to record attendance too quickly
-            last_action_time = (
-                recent_attendance.time_out
-                if recent_attendance.time_out
-                and recent_attendance.time_out >= current_time - cooldown_period
-                else recent_attendance.time_in
-            )
+        # Use database locking to prevent race conditions
+        # with_for_update() locks the row until transaction completes
+        attendance = (
+            Attendance.query.filter_by(personnel_id=personnel_id, date=today)
+            .with_for_update()
+            .first()
+        )
 
-            time_since_last_action = current_time - last_action_time
-            remaining_seconds = (
-                cooldown_period - time_since_last_action
-            ).total_seconds()
-            remaining_time = int(remaining_seconds)
-
-            return {
-                "success": True,
-                "action": "cooldown",
-                "personnel": {
-                    "id": personnel.id,
-                    "name": personnel.full_name,
-                    "station": personnel.station.station_type.value,
-                },
-                "message": f"Please wait {remaining_time} seconds before recording attendance again",
-                "remaining_time": remaining_time,
-                "time_in": (
-                    recent_attendance.time_in.strftime("%I:%M:%S %p")
-                    if recent_attendance.time_in
-                    else None
-                ),
-                "time_out": (
-                    recent_attendance.time_out.strftime("%I:%M:%S %p")
-                    if recent_attendance.time_out
-                    else None
-                ),
-            }
-
-        # Check for existing attendance record for today
-        attendance = Attendance.query.filter_by(
-            personnel_id=personnel_id, date=today
-        ).first()
-
-        # If attendance record exists for today
+        # Check for any recent attendance within cooldown period
         if attendance:
-            # Check if in cooldown period from last action
             last_action_time = (
                 attendance.time_out if attendance.time_out else attendance.time_in
             )
@@ -388,10 +480,11 @@ def process_attendance(personnel_id, confidence, base64_image=None):
                         ),
                     }
 
-            # If time_out is not recorded yet, check if this is a time-in attempt
+        # If attendance record exists for today
+        if attendance:
+            # If time_out is not recorded yet, already have time-in
             if attendance.time_out is None:
-                # If we have time_in and system detects person is trying to sign in again,
-                # show a message instead of recording time_out
+                # Person already signed in for today
                 return {
                     "success": True,
                     "action": "already_recorded",
@@ -409,7 +502,7 @@ def process_attendance(personnel_id, confidence, base64_image=None):
                     "time_out": None,
                 }
             else:
-                # Already completed attendance for the day
+                # Already completed attendance for the day (both time-in and time-out)
                 return {
                     "success": True,
                     "action": "already_recorded",
@@ -484,16 +577,18 @@ def process_attendance(personnel_id, confidence, base64_image=None):
         return {"success": False, "error": f"Error processing attendance: {str(e)}"}
 
 
-def save_attendance_image(personnel_id, base64_image, prefix):
+def save_attendance_image(
+    personnel_id: int, base64_image: str, prefix: str
+) -> Optional[str]:
     """Save attendance capture image for record keeping.
 
     Args:
-        personnel_id (int): ID of personnel
-        base64_image (str): Base64 encoded image data
-        prefix (str): Filename prefix (e.g., 'time_in', 'time_out')
+        personnel_id: ID of personnel
+        base64_image: Base64 encoded image data
+        prefix: Filename prefix (e.g., 'time_in', 'time_out')
 
     Returns:
-        str: Relative path to saved image or None if failed
+        Relative path to saved image or None if failed
     """
     try:
         # Remove data URL header if present
@@ -538,16 +633,25 @@ def save_attendance_image(personnel_id, base64_image, prefix):
         return None
 
 
-def process_base64_image(base64_image):
+def process_base64_image(
+    base64_image: str,
+) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]], Optional[str]]:
     """Process base64 image data for face detection and embedding extraction.
 
+    Validates input, detects face, and extracts embeddings.
+
     Args:
-        base64_image (str): Base64 encoded image data
+        base64_image: Base64 encoded image data
 
     Returns:
-        tuple: (face_embedding, face_metadata, temp_file_path) or (None, None, None)
+        Tuple of (face_embedding, face_metadata, temp_file_path) or (None, None, None)
     """
     try:
+        # Validate base64 image before processing
+        is_valid, error_msg = validate_base64_image(base64_image)
+        if not is_valid:
+            logger.warning(f"Base64 image validation failed: {error_msg}")
+            return None, None, None
         # Remove data URL header if present
         if "," in base64_image:
             base64_image = base64_image.split(",")[1]
@@ -600,17 +704,18 @@ def process_base64_image(base64_image):
         return None, None, None
 
 
-def register_face(personnel_id, base64_images):
+def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]:
     """Register multiple face images for a personnel member.
 
     Processes multiple face photos to create embeddings for improved recognition accuracy.
+    Clears face database cache after successful registration.
 
     Args:
-        personnel_id (int): ID of personnel to register faces for
-        base64_images (list): List of base64 encoded image data
+        personnel_id: ID of personnel to register faces for
+        base64_images: List of base64 encoded image data
 
     Returns:
-        dict: Result with success status and number of images registered
+        Dictionary with success status and number of images registered
     """
     try:
         # Get personnel data
@@ -708,6 +813,9 @@ def register_face(personnel_id, base64_images):
         db.session.commit()
         logger.info(f"Database commit successful")
 
+        # Clear face database cache since we added new face data
+        clear_face_database_cache()
+
         return {
             "success": True,
             "message": f"Successfully registered {len(registered_images)} face images",
@@ -720,7 +828,7 @@ def register_face(personnel_id, base64_images):
         return {"success": False, "error": f"Error registering faces: {str(e)}"}
 
 
-def cleanup_old_attendance_images():
+def cleanup_old_attendance_images() -> None:
     """Clean up old attendance images to free disk space.
 
     Deletes attendance images older than the configured retention period.

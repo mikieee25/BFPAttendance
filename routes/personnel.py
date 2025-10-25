@@ -24,7 +24,7 @@ from datetime import datetime
 from models import db, Personnel, User, FaceData, ActivityLog, StationType
 
 # Face recognition service
-from face_recognition.face_service import register_face
+from face_recognition.face_service import register_face, clear_face_database_cache
 
 personnel_bp = Blueprint("personnel", __name__)
 
@@ -268,6 +268,9 @@ def delete(personnel_id):
         # Delete the personnel record
         db.session.delete(personnel)
         db.session.commit()
+
+        # Clear face database cache since we deleted face data
+        clear_face_database_cache()
 
         flash(f"Personnel {name} deleted successfully", "success")
         return redirect(url_for("personnel.index"))
