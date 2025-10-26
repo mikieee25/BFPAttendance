@@ -20,7 +20,6 @@ from config import (
     FaceData,
     ActivityLog,
     StationType,
-    AttendanceStatus,
     print_success,
     print_error,
     print_warning,
@@ -28,6 +27,9 @@ from config import (
     print_header,
     confirm_action,
 )
+
+# Import AttendanceStatus from models
+from models import AttendanceStatus
 
 # Initialize Faker with Philippine locale for authentic Filipino names
 fake = Faker("fil_PH")
@@ -88,7 +90,7 @@ def create_station_users():
         print_info("All station users already exist")
 
 
-def generate_personnel_for_station(station_user, count=30):
+def generate_personnel_for_station(station_user, count=5):
     """Generate fake personnel for a specific station"""
     personnel_created = []
 
@@ -254,7 +256,7 @@ def generate_activity_logs(station_users):
     print_success(f"Created {logs_created} activity log records")
 
 
-def generate_all_fake_data(personnel_per_station=30):
+def generate_all_fake_data(personnel_per_station=5):
     """Generate complete fake dataset"""
     try:
         with get_app_context():
