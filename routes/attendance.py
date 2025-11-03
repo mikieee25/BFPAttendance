@@ -9,12 +9,16 @@ from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, desc, and_, or_
 import os
+import logging
 
 # Database models
 from models import db, Personnel, Attendance, User, AttendanceStatus, ActivityLog
 
+# Set up logger
+logger = logging.getLogger(__name__)
+
 # Face recognition service functions
-from face_recognition.face_service import (
+from face_rec_module.face_service import (
     process_base64_image,
     recognize_face,
     load_face_database,
@@ -110,8 +114,8 @@ def capture():
 def api_capture():
     """API endpoint for processing face recognition attendance capture.
 
-    Processes base64 image data, performs face recognition,
-    and records attendance if person is identified.
+    Processes base64 image data, performs face recognition with liveness detection,
+    and records attendance if person is identified and passes liveness check.
 
     Returns JSON response with success status and attendance details.
     """
@@ -122,8 +126,37 @@ def api_capture():
         if not image_data:
             return jsonify({"success": False, "error": "No image provided"}), 400
 
-        # Process the image and extract face
-        face_embedding, face_metadata, temp_path = process_base64_image(image_data)
+        # Process the image and extract face with liveness detection
+        face_embedding, face_metadata, temp_path = process_base64_image(
+            image_data, enable_liveness=True
+        )
+
+        # Log detailed liveness results
+        if face_metadata:
+            liveness_failed = face_metadata.get("liveness_failed", False)
+            liveness_details = face_metadata.get("liveness_details", {})
+            logger.info(
+                f"Attendance capture - Liveness check: {'FAILED' if liveness_failed else 'PASSED'}"
+            )
+            logger.info(f"  Liveness details: {liveness_details}")
+
+        # Check if liveness detection failed
+        if face_metadata and face_metadata.get("liveness_failed"):
+            liveness_details = face_metadata.get("liveness_details", {})
+            logger.warning(
+                f"❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
+            )
+            logger.warning(f"Liveness details: {liveness_details}")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Liveness detection failed. Please use a live camera feed, not a photo or video.",
+                        "liveness_details": liveness_details,
+                    }
+                ),
+                400,
+            )
 
         if face_embedding is None:
             return (
@@ -147,9 +180,20 @@ def api_capture():
             )
 
         # Recognize face
-        recognized_id, confidence = recognize_face(face_embedding, face_database)
+        from app import app
+
+        threshold = app.config.get("FACE_RECOGNITION_THRESHOLD", 0.6)
+        app.logger.info(f"Attempting face recognition with threshold: {threshold}")
+        app.logger.info(f"Database has {len(face_database)} registered personnel")
+
+        recognized_id, confidence = recognize_face(
+            face_embedding, face_database, threshold
+        )
 
         if recognized_id is None:
+            app.logger.warning(
+                f"Face not recognized. No match found above threshold {threshold}"
+            )
             return (
                 jsonify(
                     {
@@ -159,6 +203,12 @@ def api_capture():
                 ),
                 400,
             )
+
+        # Log successful recognition
+        personnel = Personnel.query.get(recognized_id)
+        app.logger.info(
+            f"✓ Face recognized: {personnel.full_name} (ID: {recognized_id}, Confidence: {confidence:.3f})"
+        )
 
         # Process attendance
         result = process_attendance(recognized_id, confidence, image_data)
@@ -173,7 +223,7 @@ def api_capture():
             activity = ActivityLog(
                 user_id=current_user.id,
                 title="Attendance Captured",
-                description=f"Attendance captured for {personnel.full_name} via face recognition",
+                description=f"Attendance captured for {personnel.full_name} via face recognition (liveness verified)",
             )
             db.session.add(activity)
             db.session.commit()

@@ -176,6 +176,7 @@ Attendance System{% endblock %} {% block content %}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
                 Camera ready. Position your face in the frame and click "Capture Attendance".
+                <br><small class="mt-2 d-block"><strong>Note:</strong> Liveness detection is active to prevent photo/video spoofing.</small>
             </div>
         `;
     } catch (error) {
@@ -326,6 +327,41 @@ Attendance System{% endblock %} {% block content %}
                 <div class="text-center">
                     <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
                     <p>${result.error}</p>
+                    ${
+                      result.liveness_details
+                        ? `
+                    <div class="mt-3 text-start" style="font-size: 0.9em;">
+                        <strong>Liveness Detection Details:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Method: ${
+                              result.liveness_details.method || "texture_only"
+                            }</li>
+                            <li>Texture Analysis: ${
+                              result.liveness_details.texture_live
+                                ? "✓ Passed"
+                                : "✗ Failed"
+                            } (Score: ${(
+                            result.liveness_details.texture_score * 100
+                          ).toFixed(1)}%)</li>
+                            ${
+                              result.liveness_details.motion_live !== null
+                                ? `<li>Motion Analysis: ${
+                                    result.liveness_details.motion_live
+                                      ? "✓ Passed"
+                                      : "✗ Failed"
+                                  } (Score: ${(
+                                    result.liveness_details.motion_score * 100
+                                  ).toFixed(1)}%)</li>`
+                                : ""
+                            }
+                        </ul>
+                        <div class="alert alert-warning mt-2 mb-0">
+                            <small><strong>Tip:</strong> Ensure you're using a live camera feed with natural lighting. Do not use photos, videos, or screens.</small>
+                        </div>
+                    </div>
+                    `
+                        : ""
+                    }
                 </div>
             `;
         new bootstrap.Modal(document.getElementById("errorModal")).show();
@@ -446,3 +482,4 @@ Attendance System{% endblock %} {% block content %}
   });
 </script>
 {% endblock %}
+

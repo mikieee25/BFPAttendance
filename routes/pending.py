@@ -210,7 +210,7 @@ def submit():
                 return jsonify({"success": False, "error": "Access denied"}), 403
 
             # Save the image
-            from face_recognition.face_service import save_attendance_image
+            from face_rec_module.face_service import save_attendance_image
 
             image_path = save_attendance_image(
                 personnel_id, image_data, f"pending_{attendance_type.lower()}"

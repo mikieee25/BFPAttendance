@@ -26,6 +26,7 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
 ### ⏰ Attendance Tracking
 
 - **Face Recognition**: Automated attendance capture using AI-powered face detection
+- **Liveness Detection**: 🆕 Anti-spoofing technology to prevent photo/video attacks
 - **Manual Entry**: Manual attendance recording for special cases
 - **Time In/Out**: Complete attendance tracking with working hours calculation
 - **Status Management**: Automatic status assignment (Present, Late, Absent)
@@ -73,6 +74,7 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
 - **OpenCV**: Image processing
 - **PyTorch**: Deep learning framework
 - **NumPy**: Numerical computations
+- **SciPy**: Scientific computing (liveness detection)
 
 ## Installation
 
@@ -158,6 +160,9 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
 - `FACE_RECOGNITION_THRESHOLD`: Face recognition similarity threshold (0.75)
 - `WORK_START_TIME`: Official work start time (08:00)
 - `ATTENDANCE_COOLDOWN`: Minimum seconds between attendance records (60)
+- `LIVENESS_TEXTURE_THRESHOLD`: Liveness detection sensitivity (0.6)
+- `LIVENESS_MIN_MOTION`: Minimum motion for live detection (0.001)
+- `LIVENESS_MAX_MOTION`: Maximum motion threshold (0.15)
 
 ### Directory Structure
 
@@ -226,6 +231,18 @@ BFPAttendance/
 - **Password Hashing**: Secure password storage using Werkzeug
 - **Session Management**: Secure session handling with Flask-Login
 - **File Upload Security**: Secure file handling with type validation
+- **Liveness Detection**: 🆕 Anti-spoofing technology prevents photo/video attacks
+  - Texture analysis to detect printed photos and screens
+  - Motion detection for natural micro-movements
+  - Configurable security levels
+  - See [LIVENESS_DETECTION.md](LIVENESS_DETECTION.md) for details
+
+## Documentation
+
+- **[README.md](README.md)**: This file - main documentation
+- **[LIVENESS_DETECTION.md](LIVENESS_DETECTION.md)**: Comprehensive liveness detection documentation
+- **[LIVENESS_QUICKSTART.md](LIVENESS_QUICKSTART.md)**: Quick start guide for liveness detection
+- **[LIVENESS_IMPLEMENTATION.md](LIVENESS_IMPLEMENTATION.md)**: Implementation summary and technical details
 
 ## Support
 
@@ -240,3 +257,4 @@ This project is developed for the Bureau of Fire Protection Sorsogon Province.
 **Bureau of Fire Protection**  
 **Sorsogon Province**  
 **Attendance Management System v1.0**
+

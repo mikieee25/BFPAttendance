@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 
 from models import db, Personnel, Attendance, User
-from face_recognition.face_service import (
+from face_rec_module.face_service import (
     process_base64_image,
     recognize_face,
     load_face_database,

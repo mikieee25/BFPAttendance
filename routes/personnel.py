@@ -24,7 +24,7 @@ from datetime import datetime
 from models import db, Personnel, User, FaceData, ActivityLog, StationType
 
 # Face recognition service
-from face_recognition.face_service import register_face, clear_face_database_cache
+from face_rec_module.face_service import register_face, clear_face_database_cache
 
 personnel_bp = Blueprint("personnel", __name__)
 

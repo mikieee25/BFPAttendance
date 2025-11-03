@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash
 from models import db, User, StationType, AttendanceStatus
 
 # Face recognition service (imported but not used in app.py - available for blueprints)
-from face_recognition.face_service import cleanup_old_attendance_images
+from face_rec_module.face_service import cleanup_old_attendance_images
 
 
 def create_app():
@@ -36,14 +36,29 @@ def create_app():
 
     # Face recognition settings
     app.config["YOLO_MODEL_PATH"] = os.path.join(
-        app.root_path, "face_recognition", "yolov11n-face.pt"
+        app.root_path, "face_rec_module", "yolov11n-face.pt"
     )
-    app.config["FACE_DETECTION_CONFIDENCE"] = 0.5
-    app.config["FACE_RECOGNITION_THRESHOLD"] = 0.75
+    app.config["FACE_DETECTION_CONFIDENCE"] = 0.3  # Lowered for better detection
+    app.config["FACE_RECOGNITION_THRESHOLD"] = (
+        0.35  # Balanced strict security - allows legitimate users while blocking others
+    )
     app.config["TORCH_DEVICE"] = "cpu"
     app.config["WORK_START_TIME"] = "08:00"
-    app.config["ATTENDANCE_COOLDOWN"] = 60  # seconds
+    app.config["ATTENDANCE_COOLDOWN"] = 5  # seconds
     app.config["ATTENDANCE_IMAGE_RETENTION_DAYS"] = 7
+
+    # Liveness detection settings
+    app.config["LIVENESS_TEXTURE_THRESHOLD"] = (
+        0.75  # Practical security - blocks most photos while allowing live faces
+    )
+    app.config["LIVENESS_REQUIRE_MULTI_FRAME"] = (
+        True  # Require multiple frames for enhanced security
+    )
+    app.config["LIVENESS_MIN_FRAME_DIFFERENCE"] = (
+        0.02  # Minimum change between frames to detect motion
+    )
+    app.config["LIVENESS_MIN_MOTION"] = 0.001  # Minimum motion for live detection
+    app.config["LIVENESS_MAX_MOTION"] = 0.15  # Maximum motion (prevent video playback)
 
     # Create required directories for file uploads and temporary storage
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)

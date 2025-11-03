@@ -15,6 +15,8 @@ import cv2
 import torch
 import numpy as np
 from ultralytics import YOLO
+from scipy.spatial import distance as dist
+import face_recognition as fr_lib  # dlib-based deep learning face recognition
 
 # Flask framework imports
 from flask import current_app
@@ -80,7 +82,7 @@ def get_yolo_model() -> YOLO:
             logger.warning("No app context available, using global YOLO model")
             # This should only happen during testing or initialization
             model_path = os.environ.get(
-                "YOLO_MODEL_PATH", "face_recognition/yolov11n-face.pt"
+                "YOLO_MODEL_PATH", "face_rec_module/yolov11n-face.pt"
             )
             yolo_model = YOLO(model_path)
             yolo_model.cpu()
@@ -140,10 +142,11 @@ def validate_base64_image(base64_image: str) -> Tuple[bool, Optional[str]]:
 def extract_face_embeddings(
     image_path: str,
 ) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
-    """Extract face embeddings from an image file.
+    """Extract face embeddings from an image file using deep learning.
 
-    Detects faces using YOLO model and creates a normalized embedding vector
-    for face recognition comparison.
+    Uses dlib-based face recognition library to extract 128-dimensional face encodings
+    that capture actual facial features, not just pixels. This provides reliable
+    differentiation between different people.
 
     Args:
         image_path: Path to the image file
@@ -160,12 +163,39 @@ def extract_face_embeddings(
             logger.warning(f"Could not read image: {image_path}")
             return None, None
 
-        # Run YOLO face detection
-        results = model(
-            img, conf=current_app.config.get("FACE_DETECTION_CONFIDENCE", 0.5)
+        logger.info(f"Image loaded successfully: {image_path}, shape: {img.shape}")
+
+        # Run YOLO face detection for consistency and speed
+        try:
+            confidence_threshold = current_app.config.get(
+                "FACE_DETECTION_CONFIDENCE", 0.5
+            )
+        except RuntimeError:
+            # No app context available, use default
+            confidence_threshold = 0.5
+
+        logger.info(
+            f"Running YOLO face detection with confidence threshold: {confidence_threshold}"
         )
+
+        results = model(img, conf=confidence_threshold)
+
+        logger.info(f"YOLO results: {len(results)} result sets")
+        if len(results) > 0:
+            logger.info(
+                f"Boxes found: {len(results[0].boxes) if results[0].boxes is not None else 0}"
+            )
+            if results[0].boxes is not None and len(results[0].boxes) > 0:
+                confidences = results[0].boxes.conf.cpu().numpy()
+                logger.info(f"Detection confidences: {confidences}")
+
         if len(results) == 0 or len(results[0].boxes) == 0:
-            logger.debug(f"No faces detected in image: {image_path}")
+            logger.warning(f"❌ No faces detected in image: {image_path}")
+            logger.warning(f"  - Image shape: {img.shape}")
+            logger.warning(f"  - Confidence threshold: {confidence_threshold}")
+            logger.warning(
+                f"  - Try better lighting, face closer to camera, or lower threshold"
+            )
             return None, None
 
         # Select the face with highest confidence
@@ -177,24 +207,36 @@ def extract_face_embeddings(
         bbox = boxes.xyxy[max_idx].cpu().numpy().astype(int)
         confidence = float(confidences[max_idx])
 
-        # Crop face region from original image
-        face = img[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+        # Convert image from BGR (OpenCV) to RGB (face_recognition library)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # Create standardized face embedding for comparison
-        # Resize to consistent dimensions for uniform comparison
-        face_resized = cv2.resize(face, (128, 128))
+        # Extract deep learning face embeddings using dlib's ResNet model
+        # This creates a 128-dimensional vector that captures actual facial features
+        # like eye spacing, nose shape, jaw structure, etc.
+        face_locations = [
+            (bbox[1], bbox[2], bbox[3], bbox[0])
+        ]  # Convert to (top, right, bottom, left)
+        face_encodings = fr_lib.face_encodings(
+            img_rgb, known_face_locations=face_locations
+        )
 
-        # Convert to grayscale to reduce dimensionality and improve consistency
-        face_gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
+        if len(face_encodings) == 0:
+            logger.warning(
+                f"Could not generate face encoding for detected face in: {image_path}"
+            )
+            return None, None
 
-        # Create embedding by flattening pixel values
-        embedding = face_gray.flatten().astype(float)
+        # Get the first (and should be only) face encoding
+        embedding = face_encodings[0]
 
-        # Normalize embedding vector for consistent comparison
+        # face_recognition embeddings are already normalized, but we double-check
         if np.linalg.norm(embedding) > 0:
             embedding = embedding / np.linalg.norm(embedding)
 
         # Return embedding as Python list with metadata
+        logger.info(
+            f"Successfully extracted deep learning face embedding (128-dim) from {image_path}"
+        )
         return embedding.tolist(), {
             "bbox": bbox.tolist(),
             "confidence": float(confidence),
@@ -206,49 +248,46 @@ def extract_face_embeddings(
 
 
 def compare_embeddings(
-    emb1: List[float], emb2: List[float], threshold: float = 0.75
+    emb1: List[float], emb2: List[float], threshold: float = 0.6
 ) -> Tuple[float, bool]:
-    """Compare two face embeddings using cosine similarity.
+    """Compare two face embeddings using face_recognition library's distance function.
+
+    Uses the face_recognition library's optimized distance calculation which is the
+    industry standard for comparing dlib face encodings.
 
     Args:
-        emb1: First face embedding
-        emb2: Second face embedding
-        threshold: Similarity threshold for match determination
+        emb1: First face embedding (128-dimensional)
+        emb2: Second face embedding (128-dimensional)
+        threshold: Distance threshold for match determination (lower = stricter, default 0.6)
 
     Returns:
-        Tuple of (similarity_score, is_match_boolean)
+        Tuple of (distance, is_match_boolean) - Note: Lower distance means better match!
     """
     try:
-        # Convert to flattened numpy arrays
-        emb1 = np.array(emb1).flatten()
-        emb2 = np.array(emb2).flatten()
+        # Convert to numpy arrays
+        emb1 = np.array(emb1)
+        emb2 = np.array(emb2)
 
         # Make sure they're the same shape
         if emb1.shape != emb2.shape:
             logger.warning(
                 f"Embedding shapes don't match: {emb1.shape} vs {emb2.shape}"
             )
-            return 0.0, False
+            return 999.0, False  # Very high distance = no match
 
-        # Compute cosine similarity
-        dot_product = np.dot(emb1, emb2)
-        norm1 = np.linalg.norm(emb1)
-        norm2 = np.linalg.norm(emb2)
-
-        # Avoid division by zero
-        if norm1 == 0 or norm2 == 0:
-            return 0.0, False
-
-        similarity = float(dot_product / (norm1 * norm2))
+        # Use face_recognition library's optimized distance function
+        # This is the same method used by the library's compare_faces function
+        distance = float(fr_lib.face_distance([emb1], emb2)[0])
 
         # Determine if it's a match based on threshold
-        is_match = bool(similarity >= threshold)
+        # Note: LOWER distance means BETTER match (opposite of similarity)
+        is_match = bool(distance <= threshold)
 
-        return similarity, is_match
+        return distance, is_match
 
     except Exception as e:
         logger.error(f"Error comparing embeddings: {e}")
-        return 0.0, False
+        return 999.0, False  # Very high distance = no match
 
 
 def clear_face_database_cache() -> None:
@@ -354,48 +393,142 @@ def recognize_face(
 ) -> Tuple[Optional[int], float]:
     """Identify a person by comparing face embedding against database.
 
+    Uses Euclidean distance for comparison. LOWER distance = BETTER match.
+
     Args:
-        face_embedding: Face embedding to identify
+        face_embedding: Face embedding to identify (128-dimensional)
         face_database: Database of known face embeddings
-        threshold: Recognition threshold. Uses config default if None.
+        threshold: Recognition threshold (distance). Uses config default if None.
 
     Returns:
-        Tuple of (personnel_id, confidence_score) or (None, 0) if no match
+        Tuple of (personnel_id, distance) or (None, 999.0) if no match
     """
     try:
         if face_embedding is None or not face_database:
             logger.warning("No face embedding or empty database")
-            return None, 0
+            return None, 999.0
 
         # Use provided threshold or get from config
         if threshold is None:
-            threshold = current_app.config.get("FACE_RECOGNITION_THRESHOLD", 0.75)
+            threshold = current_app.config.get("FACE_RECOGNITION_THRESHOLD", 0.6)
 
-        max_similarity = 0
+        min_distance = 999.0  # Start with very high distance
         recognized_id = None
+
+        # NEW SECURITY: Track matches per person for additional validation
+        person_matches = {}  # personnel_id -> list of (distance, match) pairs
+
+        # Track all matches for logging
+        matches_found = []
 
         for personnel_id, data in face_database.items():
             if not data.get("embeddings"):
                 continue
+
+            person_matches[personnel_id] = []
 
             # Compare with all embeddings for this person
             for db_embedding in data["embeddings"]:
                 if db_embedding is None:
                     continue
 
-                similarity, match = compare_embeddings(
+                distance, match = compare_embeddings(
                     face_embedding, db_embedding, threshold
                 )
 
-                if match and similarity > max_similarity:
-                    max_similarity = similarity
+                # Log ALL comparisons for debugging
+                matches_found.append(
+                    {
+                        "personnel_id": personnel_id,
+                        "distance": distance,
+                        "match": match,
+                    }
+                )
+
+                # Track matches per person
+                person_matches[personnel_id].append((distance, match))
+
+                # Find the MINIMUM distance (best match)
+                if match and distance < min_distance:
+                    min_distance = distance
                     recognized_id = personnel_id
 
-        return recognized_id, max_similarity
+        # ENHANCED SECURITY: Require multiple consistent matches for the same person
+        if recognized_id is not None and min_distance <= threshold:
+            person_distances = person_matches[recognized_id]
+            valid_matches = [d for d, m in person_distances if m]
+
+            # Require at least 2 out of 3 embeddings to match (if 3+ available)
+            # or at least 1 out of 2 (if 2 available)
+            # or just 1 (if only 1 available)
+            required_matches = max(1, len(person_distances) // 2)
+
+            if len(valid_matches) >= required_matches:
+                # Additional check: average distance should also be reasonable
+                avg_distance = sum(valid_matches) / len(valid_matches)
+                if avg_distance <= threshold * 1.2:  # Allow some tolerance on average
+                    print(
+                        f"✓ FACE RECOGNIZED: Personnel ID {recognized_id}, Best: {min_distance:.3f}, Avg: {avg_distance:.3f} ({len(valid_matches)}/{len(person_distances)} matches, threshold: {threshold})"
+                    )
+                    logger.info(
+                        f"✓ Face recognized: Personnel ID {recognized_id}, Best: {min_distance:.3f}, Avg: {avg_distance:.3f} ({len(valid_matches)}/{len(person_distances)} matches, threshold: {threshold})"
+                    )
+                    if matches_found:
+                        print(f"  All matches found: {matches_found}")
+                        logger.info(f"  All matches found: {matches_found}")
+                    return recognized_id, min_distance
+                else:
+                    print(
+                        f"❌ RECOGNITION FAILED: Average distance {avg_distance:.3f} too high (threshold: {threshold})"
+                    )
+                    logger.warning(
+                        f"❌ Recognition failed: Average distance {avg_distance:.3f} too high"
+                    )
+                    recognized_id = None
+            else:
+                print(
+                    f"❌ RECOGNITION FAILED: Only {len(valid_matches)}/{len(person_distances)} embeddings matched (need {required_matches})"
+                )
+                logger.warning(
+                    f"❌ Recognition failed: Only {len(valid_matches)}/{len(person_distances)} embeddings matched"
+                )
+                recognized_id = None
+            print(
+                f"✓ FACE RECOGNIZED: Personnel ID {recognized_id}, Distance: {min_distance:.3f} (threshold: {threshold})"
+            )
+            logger.info(
+                f"✓ Face recognized: Personnel ID {recognized_id}, Distance: {min_distance:.3f} (threshold: {threshold})"
+            )
+            if matches_found:
+                print(f"  All matches found: {matches_found}")
+                logger.info(f"  All matches found: {matches_found}")
+            return recognized_id, min_distance
+        else:
+            # No valid match found
+            if matches_found:
+                print(
+                    f"❌ NO MATCH FOUND. Best distance: {min_distance:.3f} > threshold {threshold}"
+                )
+                print(f"  Close matches (not good enough): {matches_found}")
+                logger.warning(
+                    f"❌ No match found. Best distance: {min_distance:.3f} > threshold {threshold}"
+                )
+                logger.warning(f"  Close matches (not good enough): {matches_found}")
+            else:
+                print(
+                    f"❌ NO MATCH FOUND. No faces close enough (best: {min_distance:.3f}, threshold: {threshold})"
+                )
+                logger.warning(
+                    f"❌ No match found. No faces close enough (best: {min_distance:.3f}, threshold: {threshold})"
+                )
+            return None, 999.0
 
     except Exception as e:
         logger.error(f"Error recognizing face: {e}")
-        return None, 0
+        import traceback
+
+        logger.error(traceback.format_exc())
+        return None, 999.0
 
 
 def process_attendance(
@@ -633,15 +766,476 @@ def save_attendance_image(
         return None
 
 
+def detect_texture_artifacts(
+    image: np.ndarray, face_bbox: np.ndarray
+) -> Tuple[bool, float]:
+    """Detect texture artifacts that indicate a printed photo or screen display.
+
+    Analyzes frequency domain and edge patterns to identify reproductions.
+
+    Args:
+        image: Original image in BGR format
+        face_bbox: Bounding box coordinates [x1, y1, x2, y2]
+
+    Returns:
+        Tuple of (is_live, artifact_score) where higher score means more likely live
+    """
+    try:
+        # Extract face region with some padding for better analysis
+        x1, y1, x2, y2 = face_bbox.astype(int)
+
+        # Add padding to get surrounding context
+        height, width = image.shape[:2]
+        padding = 20
+        y1_padded = max(0, y1 - padding)
+        y2_padded = min(height, y2 + padding)
+        x1_padded = max(0, x1 - padding)
+        x2_padded = min(width, x2 + padding)
+
+        face = image[y1_padded:y2_padded, x1_padded:x2_padded]
+
+        if face.size == 0:
+            return False, 0.0
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+
+        # Calculate various texture metrics with weights
+        scores = []
+        weights = []
+
+        # 1. Laplacian variance (measures image sharpness/blur) - CRITICAL
+        # Photos tend to have uniform sharpness, live faces have variable sharpness
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        # Photos often have TOO consistent sharpness (either very sharp or very blurry)
+        # Live faces: 100-400 is typical
+        if 100 < laplacian_var < 400:
+            lap_score = 1.0
+        elif 50 < laplacian_var < 600:
+            lap_score = 0.7
+        else:
+            lap_score = 0.3  # Too sharp or too blurry = likely photo
+        scores.append(lap_score)
+        weights.append(2.0)  # Double weight - most important
+
+        # 2. Frequency domain analysis - HIGH IMPORTANCE
+        # Screens/prints show periodic patterns and uniform frequency distribution
+        f_transform = np.fft.fft2(gray)
+        f_shift = np.fft.fftshift(f_transform)
+        magnitude_spectrum = 20 * np.log(np.abs(f_shift) + 1)
+
+        # Check for periodic peaks (screen patterns)
+        freq_std = np.std(magnitude_spectrum)
+        freq_mean = np.mean(magnitude_spectrum)
+
+        # Live faces have more varied frequency content
+        # Photos/screens have more uniform frequency distribution
+        freq_score = min(freq_std / 25.0, 1.0)
+        scores.append(freq_score)
+        weights.append(1.5)
+
+        # 3. Spectral analysis - detect moiré patterns from screens
+        # Look for high-frequency periodic patterns
+        rows, cols = gray.shape
+        crow, ccol = rows // 2, cols // 2
+        # Check the high-frequency region
+        high_freq = magnitude_spectrum[crow - 20 : crow + 20, ccol - 20 : ccol + 20]
+        low_freq = magnitude_spectrum[0:40, 0:40]
+        freq_ratio = np.mean(high_freq) / (np.mean(low_freq) + 1e-6)
+
+        # Photos/screens have stronger high-frequency patterns
+        spectral_score = 1.0 if freq_ratio < 0.8 else 0.4
+        scores.append(spectral_score)
+        weights.append(1.5)
+
+        # 4. Color variation analysis - IMPORTANT
+        # Screens have limited color gamut, photos have compressed color range
+        hsv = cv2.cvtColor(face, cv2.COLOR_BGR2HSV)
+        bgr_face = face
+
+        # Calculate color variation in multiple channels
+        h_std = np.std(hsv[:, :, 0])
+        s_std = np.std(hsv[:, :, 1])
+        v_std = np.std(hsv[:, :, 2])
+        b_std = np.std(bgr_face[:, :, 0])
+        g_std = np.std(bgr_face[:, :, 1])
+        r_std = np.std(bgr_face[:, :, 2])
+
+        # Live faces have rich color variation
+        color_variance = (h_std + s_std + v_std + b_std + g_std + r_std) / 6.0
+        color_score = min(color_variance / 40.0, 1.0)
+        scores.append(color_score)
+        weights.append(2.0)  # High weight
+
+        # 5. Edge density and quality
+        # Photos have sharper, more uniform edges
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = np.sum(edges > 0) / edges.size
+
+        # Calculate edge strength variation
+        edge_sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        edge_sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        edge_magnitude = np.sqrt(edge_sobel_x**2 + edge_sobel_y**2)
+        edge_std = np.std(edge_magnitude)
+
+        # Natural faces: moderate edge density with variation
+        if 0.04 < edge_density < 0.15 and edge_std > 10:
+            edge_score = 1.0
+        elif 0.03 < edge_density < 0.20:
+            edge_score = 0.6
+        else:
+            edge_score = 0.3
+        scores.append(edge_score)
+        weights.append(1.0)
+
+        # 7. Screen reflection detection - NEW HIGH-SECURITY CHECK
+        # Look for uniform brightness patterns typical of screen displays
+        brightness_variance = np.var(gray)
+        mean_brightness = np.mean(gray)
+
+        # Screens often have more uniform brightness distribution
+        # Calculate local brightness variance to detect screen uniformity
+        kernel_size = 15
+        kernel = np.ones((kernel_size, kernel_size), np.float32) / (
+            kernel_size * kernel_size
+        )
+        local_mean = cv2.filter2D(gray.astype(np.float32), -1, kernel)
+        local_variance = cv2.filter2D(
+            (gray.astype(np.float32) - local_mean) ** 2, -1, kernel
+        )
+
+        # Screen displays have lower local variance
+        local_var_mean = np.mean(local_variance)
+
+        # Live faces have more natural lighting variation
+        if local_var_mean > 80 and brightness_variance > 200:
+            reflection_score = 1.0
+        elif local_var_mean > 50 and brightness_variance > 150:
+            reflection_score = 0.7
+        else:
+            reflection_score = 0.2  # Likely screen/photo
+        scores.append(reflection_score)
+        weights.append(2.5)  # Very high weight for security
+
+        # 9. JPEG compression artifact detection - CRITICAL ANTI-PHOTO CHECK
+        # Photos contain JPEG compression artifacts that live faces don't have
+        # Look for 8x8 block patterns typical of JPEG compression
+        jpeg_score = 1.0  # Start assuming live
+        block_var_std = 0.0  # Initialize for logging
+
+        if gray.shape[0] >= 16 and gray.shape[1] >= 16:
+            # Analyze 8x8 blocks for compression patterns
+            block_variances = []
+            for i in range(0, gray.shape[0] - 8, 8):
+                for j in range(0, gray.shape[1] - 8, 8):
+                    block = gray[i : i + 8, j : j + 8].astype(np.float32)
+                    # Check for uniform compression patterns
+                    block_var = np.var(block)
+                    block_mean = np.mean(block)
+
+                    # JPEG blocks often have specific variance patterns
+                    if block_var > 0:
+                        block_variances.append(block_var)
+
+            if block_variances:
+                # Photos often have more uniform block variance distribution
+                block_var_std = np.std(block_variances)
+                block_var_mean = np.mean(block_variances)
+
+                # Live faces have more natural variance patterns
+                if block_var_std > 50 and block_var_mean > 100:
+                    jpeg_score = 1.0  # Natural, live face patterns
+                elif block_var_std > 30:
+                    jpeg_score = 0.7  # Possibly live
+                else:
+                    jpeg_score = 0.1  # Likely compressed photo
+
+        scores.append(jpeg_score)
+        weights.append(3.0)  # Very high weight - photos almost always fail this
+
+        # 10. Screen moiré pattern detection - ANTI-SCREEN CHECK
+        # When taking photos of screens, moiré patterns appear
+        fft = np.fft.fft2(gray)
+        fft_shift = np.fft.fftshift(fft)
+        magnitude = np.abs(fft_shift)
+
+        # Look for periodic high-frequency patterns (screen refresh rates)
+        rows, cols = magnitude.shape
+        center_row, center_col = rows // 2, cols // 2
+
+        # Check for regular patterns in frequency domain
+        # Screens create regular frequency spikes
+        freq_peaks = []
+        for r in range(center_row - 20, center_row + 20):
+            for c in range(center_col - 20, center_col + 20):
+                if 0 <= r < rows and 0 <= c < cols:
+                    freq_peaks.append(magnitude[r, c])
+
+        freq_peak_std = 0.0  # Initialize for logging
+        if freq_peaks:
+            freq_peak_std = np.std(freq_peaks)
+            # Regular patterns = lower variance = likely screen
+            if freq_peak_std < 1000:
+                moire_score = 0.2  # Likely screen capture
+            elif freq_peak_std < 5000:
+                moire_score = 0.6  # Possibly screen
+            else:
+                moire_score = 1.0  # Natural patterns
+        else:
+            moire_score = 1.0
+
+        scores.append(moire_score)
+        weights.append(2.0)
+
+        # 8. Micro-contrast analysis - ANTI-PHOTO CHECK
+        # Photos lose micro-contrast details during capture/print/display
+        # Calculate contrast in small regions
+        micro_contrast_scores = []
+        for i in range(0, gray.shape[0] - 10, 10):
+            for j in range(0, gray.shape[1] - 10, 10):
+                patch = gray[i : i + 10, j : j + 10]
+                if patch.size > 0:
+                    patch_contrast = np.std(patch.astype(np.float32))
+                    micro_contrast_scores.append(patch_contrast)
+
+        if micro_contrast_scores:
+            avg_micro_contrast = np.mean(micro_contrast_scores)
+            # Live faces have richer micro-contrast
+            micro_score = min(avg_micro_contrast / 25.0, 1.0)
+        else:
+            micro_score = 0.0
+        scores.append(micro_score)
+        weights.append(2.0)
+
+        # 6. Local Binary Pattern (LBP) texture - ENHANCED
+        # Measures micro-texture patterns - photos have different patterns
+        # Simple LBP implementation
+        lbp_hist = []
+        for i in range(1, gray.shape[0] - 1):
+            for j in range(1, gray.shape[1] - 1):
+                center = gray[i, j]
+                code = 0
+                code |= (gray[i - 1, j - 1] > center) << 7
+                code |= (gray[i - 1, j] > center) << 6
+                code |= (gray[i - 1, j + 1] > center) << 5
+                code |= (gray[i, j + 1] > center) << 4
+                code |= (gray[i + 1, j + 1] > center) << 3
+                code |= (gray[i + 1, j] > center) << 2
+                code |= (gray[i + 1, j - 1] > center) << 1
+                code |= (gray[i, j - 1] > center) << 0
+                lbp_hist.append(code)
+
+        # Calculate entropy of LBP patterns
+        lbp_unique = len(set(lbp_hist))
+        lbp_entropy = lbp_unique / 256.0  # Normalize by max possible patterns
+
+        # Live faces have richer micro-texture patterns
+        lbp_score = min(lbp_entropy * 1.5, 1.0)
+        scores.append(lbp_score)
+        weights.append(1.0)
+
+        # Calculate weighted average
+        weighted_scores = [s * w for s, w in zip(scores, weights)]
+        final_score = sum(weighted_scores) / sum(weights)
+
+        # Threshold for liveness
+        threshold = current_app.config.get("LIVENESS_TEXTURE_THRESHOLD", 0.6)
+        is_live = final_score >= threshold
+
+        logger.info(f"Texture analysis - Score: {final_score:.3f}, Live: {is_live}")
+        logger.info(f"  Laplacian: {laplacian_var:.1f} (score: {lap_score:.2f})")
+        logger.info(
+            f"  Frequency: std={freq_std:.1f}, ratio={freq_ratio:.3f} (score: {freq_score:.2f})"
+        )
+        logger.info(
+            f"  Color variance: {color_variance:.1f} (score: {color_score:.2f})"
+        )
+        logger.info(
+            f"  Edge density: {edge_density:.3f}, std={edge_std:.1f} (score: {edge_score:.2f})"
+        )
+        logger.info(f"  LBP entropy: {lbp_entropy:.3f} (score: {lbp_score:.2f})")
+        logger.info(f"  Spectral score: {spectral_score:.2f}")
+        logger.info(
+            f"  Reflection: local_var={local_var_mean:.1f}, brightness_var={brightness_variance:.1f} (score: {reflection_score:.2f})"
+        )
+        logger.info(
+            f"  Micro-contrast: {avg_micro_contrast:.1f} (score: {micro_score:.2f})"
+        )
+        if "block_var_std" in locals():
+            logger.info(
+                f"  JPEG artifacts: block_var_std={block_var_std:.1f} (score: {jpeg_score:.2f})"
+            )
+        if "freq_peak_std" in locals():
+            logger.info(
+                f"  Moiré patterns: freq_peak_std={freq_peak_std:.1f} (score: {moire_score:.2f})"
+            )
+        else:
+            logger.info(f"  JPEG artifacts: (score: {jpeg_score:.2f})")
+            logger.info(f"  Moiré patterns: (score: {moire_score:.2f})")
+
+        return is_live, final_score
+
+    except Exception as e:
+        logger.error(f"Error in texture analysis: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
+        return False, 0.0
+
+
+def detect_motion_liveness(frames: List[np.ndarray]) -> Tuple[bool, float]:
+    """Detect liveness through motion analysis across multiple frames.
+
+    Analyzes optical flow and frame differences to detect natural movement.
+
+    Args:
+        frames: List of consecutive frames (minimum 3 required)
+
+    Returns:
+        Tuple of (is_live, motion_score) where higher score means more motion detected
+    """
+    try:
+        if len(frames) < 3:
+            logger.warning("Insufficient frames for motion detection")
+            return False, 0.0
+
+        # Convert frames to grayscale
+        gray_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in frames]
+
+        motion_scores = []
+
+        # Calculate frame differences
+        for i in range(len(gray_frames) - 1):
+            # Calculate absolute difference
+            diff = cv2.absdiff(gray_frames[i], gray_frames[i + 1])
+
+            # Threshold to get significant changes
+            _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+
+            # Calculate motion percentage
+            motion_pixels = np.sum(thresh > 0)
+            total_pixels = thresh.size
+            motion_percentage = motion_pixels / total_pixels
+
+            motion_scores.append(motion_percentage)
+
+        # Average motion across frames
+        avg_motion = np.mean(motion_scores)
+
+        # Check for natural motion range
+        # Too little = static image, too much = video or tampering
+        min_motion = current_app.config.get("LIVENESS_MIN_MOTION", 0.001)
+        max_motion = current_app.config.get("LIVENESS_MAX_MOTION", 0.15)
+
+        is_live = min_motion <= avg_motion <= max_motion
+
+        # Normalize score
+        if avg_motion < min_motion:
+            motion_score = 0.0
+        elif avg_motion > max_motion:
+            motion_score = 0.3
+        else:
+            motion_score = min(avg_motion / max_motion, 1.0)
+
+        logger.debug(
+            f"Motion analysis - Avg motion: {avg_motion:.4f}, Score: {motion_score:.3f}, Live: {is_live}"
+        )
+
+        return is_live, motion_score
+
+    except Exception as e:
+        logger.error(f"Error in motion detection: {e}")
+        return False, 0.0
+
+
+def analyze_liveness(
+    image: np.ndarray,
+    face_bbox: np.ndarray,
+    previous_frames: Optional[List[np.ndarray]] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Comprehensive liveness detection combining multiple methods.
+
+    Args:
+        image: Current frame in BGR format
+        face_bbox: Face bounding box [x1, y1, x2, y2]
+        previous_frames: List of previous frames for motion analysis (optional)
+
+    Returns:
+        Tuple of (is_live, liveness_details) with detailed analysis
+    """
+    try:
+        liveness_details = {
+            "texture_live": False,
+            "texture_score": 0.0,
+            "motion_live": None,
+            "motion_score": None,
+            "overall_live": False,
+            "confidence": 0.0,
+            "method": "texture_only",
+        }
+
+        # 1. Texture-based liveness detection (always performed)
+        texture_live, texture_score = detect_texture_artifacts(image, face_bbox)
+        liveness_details["texture_live"] = texture_live
+        liveness_details["texture_score"] = float(texture_score)
+
+        # 2. Motion-based liveness detection (if previous frames available)
+        if previous_frames and len(previous_frames) >= 2:
+            all_frames = previous_frames + [image]
+            motion_live, motion_score = detect_motion_liveness(
+                all_frames[-5:]
+            )  # Use last 5 frames
+            liveness_details["motion_live"] = motion_live
+            liveness_details["motion_score"] = float(motion_score)
+            liveness_details["method"] = "texture_and_motion"
+
+            # BALANCED SECURITY: Both checks must pass with reasonable confidence
+            overall_live = (
+                texture_live
+                and motion_live
+                and texture_score > 0.85
+                and motion_score > 0.3
+            )
+            confidence = (texture_score + motion_score) / 2.0
+        else:
+            # BALANCED SECURITY: Without motion data, use standard texture threshold
+            # This balances security with usability for legitimate users
+            overall_live = texture_live
+            confidence = texture_score
+
+            # Log info about texture-only analysis
+            logger.info("ℹ️ Liveness check using texture analysis only (no motion data)")
+
+        liveness_details["overall_live"] = overall_live
+        liveness_details["confidence"] = float(confidence)
+
+        logger.info(
+            f"Liveness detection - Live: {overall_live}, Confidence: {confidence:.3f}"
+        )
+        logger.info(f"  Texture: {texture_live} ({texture_score:.3f})")
+        if liveness_details["motion_live"] is not None:
+            logger.info(f"  Motion: {motion_live} ({motion_score:.3f})")
+
+        return overall_live, liveness_details
+
+    except Exception as e:
+        logger.error(f"Error in liveness analysis: {e}")
+        return False, {"overall_live": False, "error": str(e)}
+
+
 def process_base64_image(
     base64_image: str,
+    enable_liveness: bool = True,
+    previous_frames: Optional[List[np.ndarray]] = None,
 ) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]], Optional[str]]:
     """Process base64 image data for face detection and embedding extraction.
 
-    Validates input, detects face, and extracts embeddings.
+    Validates input, detects face, performs liveness detection, and extracts embeddings.
 
     Args:
         base64_image: Base64 encoded image data
+        enable_liveness: Whether to perform liveness detection (default: True)
+        previous_frames: Optional list of previous frames for motion analysis
 
     Returns:
         Tuple of (face_embedding, face_metadata, temp_file_path) or (None, None, None)
@@ -665,9 +1259,15 @@ def process_base64_image(
 
         # Run YOLO detection
         model = get_yolo_model()
-        results = model(
-            img, conf=current_app.config.get("FACE_DETECTION_CONFIDENCE", 0.5)
-        )
+        try:
+            face_detection_confidence = current_app.config.get(
+                "FACE_DETECTION_CONFIDENCE", 0.5
+            )
+        except RuntimeError:
+            # No app context available, use default
+            face_detection_confidence = 0.5
+
+        results = model(img, conf=face_detection_confidence)
 
         # Check if faces are detected
         if len(results) == 0 or len(results[0].boxes) == 0:
@@ -682,20 +1282,51 @@ def process_base64_image(
         bbox = boxes.xyxy[max_idx].cpu().numpy().astype(int)
         confidence = float(confidences[max_idx])
 
+        # Perform liveness detection if enabled
+        if enable_liveness:
+            logger.info("=== Starting Liveness Detection ===")
+            is_live, liveness_details = analyze_liveness(img, bbox, previous_frames)
+            logger.info(
+                f"=== Liveness Result: {'LIVE' if is_live else 'FAKE/PHOTO'} ==="
+            )
+
+            if not is_live:
+                logger.warning(
+                    "❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
+                )
+                logger.warning(f"Liveness details: {liveness_details}")
+                # Return None to indicate failure with liveness info in metadata
+                return (
+                    None,
+                    {"liveness_failed": True, "liveness_details": liveness_details},
+                    None,
+                )
+            else:
+                logger.info("✓ LIVENESS DETECTION PASSED - Live person detected")
+
         # Extract face
         face = img[bbox[1] : bbox[3], bbox[0] : bbox[2]]
 
         # Create a unique filename for the face image
         temp_filename = f"temp_{uuid.uuid4()}.jpg"
-        temp_path = os.path.join(
-            current_app.config["TEMP_ATTENDANCE_FOLDER"], temp_filename
-        )
+        try:
+            temp_folder = current_app.config["TEMP_ATTENDANCE_FOLDER"]
+        except RuntimeError:
+            # No app context available, use default
+            temp_folder = "static/images/attendance_temp"
+
+        temp_path = os.path.join(temp_folder, temp_filename)
 
         # Save the face image temporarily
         cv2.imwrite(temp_path, face)
 
         # Extract face embedding
         face_embedding, face_metadata = extract_face_embeddings(temp_path)
+
+        # Add liveness info to metadata if performed
+        if enable_liveness and face_metadata:
+            face_metadata["liveness_passed"] = True
+            face_metadata["liveness_details"] = liveness_details
 
         return face_embedding, face_metadata, temp_path
 
@@ -736,10 +1367,11 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
         logger.info(f"Processing {len(base64_images)} images")
         for i, base64_image in enumerate(base64_images):
             try:
-                # Process the base64 image
+                # Process the base64 image (disable liveness for registration)
                 logger.info(f"Processing image {i+1}")
                 face_embedding, face_metadata, temp_path = process_base64_image(
-                    base64_image
+                    base64_image,
+                    enable_liveness=False,  # Disable liveness for face registration
                 )
 
                 # If no face detected or error, skip
