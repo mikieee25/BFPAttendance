@@ -95,6 +95,15 @@ class Personnel(db.Model):
     # Station assignment (foreign key to User table)
     station_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
+    # Soft delete - records are never truly deleted
+    is_active = db.Column(db.Boolean, default=True)
+
+    # Shift schedule fields
+    shift_start_time = db.Column(db.Time, nullable=True)  # e.g., 08:00
+    shift_end_time = db.Column(db.Time, nullable=True)  # e.g., 17:00
+    is_shifting = db.Column(db.Boolean, default=False)  # True if on 15-day rotation
+    shift_start_date = db.Column(db.Date, nullable=True)  # Date when shift cycle started
+
     # Metadata
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     image_path = db.Column(db.String(255))  # Profile photo path
@@ -120,6 +129,35 @@ class Personnel(db.Model):
     @property
     def name_with_rank(self):
         return f"{self.rank} {self.first_name} {self.last_name}"
+
+    def is_on_duty(self, check_date=None):
+        """Check if personnel is on duty on a given date.
+        
+        For shifting personnel (15 days on, 15 days off):
+        - Calculate which day of the cycle the check_date falls on
+        - Days 1-15 are ON duty, days 16-30 are OFF duty
+        
+        Returns True if on duty, False if off duty
+        """
+        if check_date is None:
+            check_date = datetime.now().date()
+        
+        # Non-shifting personnel are always on duty
+        if not self.is_shifting:
+            return True
+        
+        # If no shift start date set, assume always on duty
+        if not self.shift_start_date:
+            return True
+        
+        # Calculate days since shift cycle started
+        days_since_start = (check_date - self.shift_start_date).days
+        
+        # Each cycle is 30 days (15 on, 15 off)
+        day_in_cycle = days_since_start % 30
+        
+        # Days 0-14 (first 15 days) are ON duty
+        return day_in_cycle < 15
 
     def __repr__(self):
         return f"<Personnel {self.full_name}>"

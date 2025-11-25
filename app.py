@@ -46,6 +46,11 @@ def create_app():
     app.config["WORK_START_TIME"] = "08:00"
     app.config["ATTENDANCE_COOLDOWN"] = 5  # seconds
     app.config["ATTENDANCE_IMAGE_RETENTION_DAYS"] = 7
+    
+    # Enhanced face detection settings (InsightFace)
+    # Set to True to use InsightFace (requires: pip install insightface onnxruntime)
+    # InsightFace provides better accuracy with RetinaFace detection and ArcFace embeddings
+    app.config["USE_INSIGHTFACE"] = os.environ.get("USE_INSIGHTFACE", "false").lower() == "true"
 
     # Liveness detection settings
     app.config["LIVENESS_TEXTURE_THRESHOLD"] = (

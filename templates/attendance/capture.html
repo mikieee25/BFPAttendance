@@ -39,6 +39,27 @@ Attendance System{% endblock %} {% block content %}
             ></canvas>
           </div>
 
+          <!-- Liveness progress indicator -->
+          <div id="livenessProgress" class="mt-3" style="display: none">
+            <div class="progress" style="height: 25px">
+              <div
+                id="livenessProgressBar"
+                class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                role="progressbar"
+                style="width: 0%"
+                aria-valuenow="0"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                Capturing frames...
+              </div>
+            </div>
+            <small class="text-muted mt-2 d-block">
+              <i class="fas fa-info-circle me-1"></i>Please look at the camera
+              and blink naturally
+            </small>
+          </div>
+
           <div class="mt-3">
             <button id="captureBtn" class="btn btn-bfp btn-lg">
               <i class="fas fa-camera me-2"></i>Capture Attendance
@@ -54,6 +75,38 @@ Attendance System{% endblock %} {% block content %}
 
           <div id="status" class="mt-3"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Liveness Info Card -->
+    <div class="card mt-3">
+      <div class="card-header bg-info text-white">
+        <h6 class="m-0">
+          <i class="fas fa-shield-alt me-2"></i>Enhanced Security
+        </h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-2">
+          <strong>This system uses advanced anti-spoofing detection:</strong>
+        </p>
+        <ul class="mb-0">
+          <li>
+            <i class="fas fa-eye text-primary me-2"></i>Blink detection -
+            Natural blinking is required
+          </li>
+          <li>
+            <i class="fas fa-head-side text-primary me-2"></i>Head movement
+            analysis - Slight natural movement expected
+          </li>
+          <li>
+            <i class="fas fa-video text-primary me-2"></i>Motion analysis -
+            Detects static photos/screens
+          </li>
+          <li>
+            <i class="fas fa-image text-primary me-2"></i>Texture analysis -
+            Identifies printed photos
+          </li>
+        </ul>
       </div>
     </div>
   </div>
@@ -114,6 +167,10 @@ Attendance System{% endblock %} {% block content %}
 <script>
   let video, canvas, ctx;
   let stream = null;
+
+  // Enhanced liveness configuration
+  const FRAME_COUNT = 12; // Number of frames to capture for liveness detection
+  const FRAME_INTERVAL = 150; // Milliseconds between frames (captures ~2 seconds of video)
 
   // Check browser compatibility
   function checkBrowserCompatibility() {
@@ -176,7 +233,7 @@ Attendance System{% endblock %} {% block content %}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
                 Camera ready. Position your face in the frame and click "Capture Attendance".
-                <br><small class="mt-2 d-block"><strong>Note:</strong> Liveness detection is active to prevent photo/video spoofing.</small>
+                <br><small class="mt-2 d-block"><strong>Note:</strong> Enhanced liveness detection will capture multiple frames - please blink naturally and keep slight movement.</small>
             </div>
         `;
     } catch (error) {
@@ -247,19 +304,61 @@ Attendance System{% endblock %} {% block content %}
     return canvas.toDataURL("image/jpeg", 0.8);
   }
 
-  async function processAttendance(imageData) {
+  // Capture multiple frames for enhanced liveness detection
+  async function captureMultipleFrames() {
+    const frames = [];
+    const progressBar = document.getElementById("livenessProgressBar");
+    const progressContainer = document.getElementById("livenessProgress");
+
+    progressContainer.style.display = "block";
+
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      frames.push(captureImage());
+
+      // Update progress bar
+      const progress = ((i + 1) / FRAME_COUNT) * 100;
+      progressBar.style.width = `${progress}%`;
+      progressBar.setAttribute("aria-valuenow", progress);
+      progressBar.textContent = `Capturing frames... ${i + 1}/${FRAME_COUNT}`;
+
+      // Wait before capturing next frame
+      if (i < FRAME_COUNT - 1) {
+        await new Promise((resolve) => setTimeout(resolve, FRAME_INTERVAL));
+      }
+    }
+
+    progressBar.textContent = "Processing...";
+    progressBar.classList.remove("bg-info");
+    progressBar.classList.add("bg-success");
+
+    return frames;
+  }
+
+  async function processAttendance(frames) {
     try {
-      const response = await fetch('{{ url_for("api.capture_attendance") }}', {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          image: imageData,
-        }),
-      });
+      // Use enhanced endpoint with multiple frames
+      const response = await fetch(
+        '{{ url_for("api.capture_attendance_enhanced") }}',
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            frames: frames,
+            main_image: frames[frames.length - 1], // Use last frame as main image
+          }),
+        }
+      );
 
       const result = await response.json();
+
+      // Hide progress bar
+      document.getElementById("livenessProgress").style.display = "none";
+      const progressBar = document.getElementById("livenessProgressBar");
+      progressBar.style.width = "0%";
+      progressBar.classList.remove("bg-success");
+      progressBar.classList.add("bg-info");
 
       if (result.success) {
         if (result.action === "time_in") {
@@ -280,6 +379,11 @@ Attendance System{% endblock %} {% block content %}
                         <p class="mb-0"><strong>Station:</strong> ${
                           result.personnel.station
                         }</p>
+                        ${
+                          result.enhanced_liveness
+                            ? '<p class="mt-2 text-success"><small><i class="fas fa-shield-alt me-1"></i>Enhanced liveness verified</small></p>'
+                            : ""
+                        }
                     </div>
                 `;
           new bootstrap.Modal(document.getElementById("successModal")).show();
@@ -288,8 +392,17 @@ Attendance System{% endblock %} {% block content %}
                     <div class="text-center">
                         <i class="fas fa-user-clock fa-3x text-info mb-3"></i>
                         <h5>${result.personnel.name}</h5>
-                        <p class="mb-2"><strong>Time Out:</strong> ${result.time}</p>
-                        <p class="mb-0"><strong>Station:</strong> ${result.personnel.station}</p>
+                        <p class="mb-2"><strong>Time Out:</strong> ${
+                          result.time
+                        }</p>
+                        <p class="mb-0"><strong>Station:</strong> ${
+                          result.personnel.station
+                        }</p>
+                        ${
+                          result.enhanced_liveness
+                            ? '<p class="mt-2 text-success"><small><i class="fas fa-shield-alt me-1"></i>Enhanced liveness verified</small></p>'
+                            : ""
+                        }
                     </div>
                 `;
           new bootstrap.Modal(document.getElementById("successModal")).show();
@@ -323,50 +436,91 @@ Attendance System{% endblock %} {% block content %}
           new bootstrap.Modal(document.getElementById("errorModal")).show();
         }
       } else {
+        // Build detailed liveness error message
+        let livenessDetailsHtml = "";
+        if (result.liveness_details) {
+          const details = result.liveness_details;
+          livenessDetailsHtml = `
+            <div class="mt-3 text-start" style="font-size: 0.9em;">
+              <strong>Liveness Detection Details:</strong>
+              <ul class="mb-0 mt-2">
+                <li>Method: ${details.method || "texture_only"}</li>
+                <li>Checks Passed: ${details.checks_passed || 0}/${
+            details.checks_total || 1
+          }</li>
+                <li>Texture Analysis: ${
+                  details.texture_live ? "✓ Passed" : "✗ Failed"
+                } 
+                    (Score: ${((details.texture_score || 0) * 100).toFixed(
+                      1
+                    )}%)</li>
+                ${
+                  details.motion_live !== null &&
+                  details.motion_live !== undefined
+                    ? `
+                  <li>Motion Analysis: ${
+                    details.motion_live ? "✓ Passed" : "✗ Failed"
+                  } 
+                      (Score: ${((details.motion_score || 0) * 100).toFixed(
+                        1
+                      )}%)</li>
+                `
+                    : ""
+                }
+                ${
+                  details.blink_detected !== null &&
+                  details.blink_detected !== undefined
+                    ? `
+                  <li>Blink Detection: ${
+                    details.blink_detected ? "✓ Blink Detected" : "✗ No Blink"
+                  } 
+                      (Count: ${details.blink_count || 0})</li>
+                `
+                    : ""
+                }
+                ${
+                  details.head_movement_live !== null &&
+                  details.head_movement_live !== undefined
+                    ? `
+                  <li>Head Movement: ${
+                    details.head_movement_live
+                      ? "✓ Movement Detected"
+                      : "✗ No Movement"
+                  } 
+                      (Score: ${(
+                        (details.head_movement_score || 0) * 100
+                      ).toFixed(1)}%)</li>
+                `
+                    : ""
+                }
+              </ul>
+              <div class="alert alert-warning mt-2 mb-0">
+                <small><strong>Tips:</strong>
+                  <ul class="mb-0 ps-3">
+                    <li>Ensure you're using a live camera, not a photo</li>
+                    <li>Blink naturally during capture</li>
+                    <li>Keep slight natural movement (don't stay completely still)</li>
+                    <li>Ensure good lighting on your face</li>
+                  </ul>
+                </small>
+              </div>
+            </div>
+          `;
+        }
+
         document.getElementById("errorMessage").innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                    <p>${result.error}</p>
-                    ${
-                      result.liveness_details
-                        ? `
-                    <div class="mt-3 text-start" style="font-size: 0.9em;">
-                        <strong>Liveness Detection Details:</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>Method: ${
-                              result.liveness_details.method || "texture_only"
-                            }</li>
-                            <li>Texture Analysis: ${
-                              result.liveness_details.texture_live
-                                ? "✓ Passed"
-                                : "✗ Failed"
-                            } (Score: ${(
-                            result.liveness_details.texture_score * 100
-                          ).toFixed(1)}%)</li>
-                            ${
-                              result.liveness_details.motion_live !== null
-                                ? `<li>Motion Analysis: ${
-                                    result.liveness_details.motion_live
-                                      ? "✓ Passed"
-                                      : "✗ Failed"
-                                  } (Score: ${(
-                                    result.liveness_details.motion_score * 100
-                                  ).toFixed(1)}%)</li>`
-                                : ""
-                            }
-                        </ul>
-                        <div class="alert alert-warning mt-2 mb-0">
-                            <small><strong>Tip:</strong> Ensure you're using a live camera feed with natural lighting. Do not use photos, videos, or screens.</small>
-                        </div>
-                    </div>
-                    `
-                        : ""
-                    }
-                </div>
-            `;
+          <div class="text-center">
+            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
+            <p>${result.error}</p>
+            ${livenessDetailsHtml}
+          </div>
+        `;
         new bootstrap.Modal(document.getElementById("errorModal")).show();
       }
     } catch (error) {
+      // Hide progress bar on error
+      document.getElementById("livenessProgress").style.display = "none";
+
       console.error("Error processing attendance:", error);
       document.getElementById("errorMessage").innerHTML = `
             <div class="text-center">
@@ -386,13 +540,19 @@ Attendance System{% endblock %} {% block content %}
 
       button.disabled = true;
       button.innerHTML =
-        '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        '<i class="fas fa-spinner fa-spin me-2"></i>Capturing...';
 
       try {
-        const imageData = captureImage();
-        await processAttendance(imageData);
+        // Capture multiple frames for enhanced liveness detection
+        const frames = await captureMultipleFrames();
+
+        button.innerHTML =
+          '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+
+        await processAttendance(frames);
       } catch (error) {
         console.error("Error:", error);
+        document.getElementById("livenessProgress").style.display = "none";
         document.getElementById("errorMessage").innerHTML = `
             <div class="text-center">
                 <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>

@@ -21,6 +21,10 @@ Pillow
 scipy
 face-recognition  # Deep learning face recognition with dlib
 
+# Enhanced Face Detection
+insightface  
+onnxruntime-gpu 
+
 # Data Processing & Visualization
 matplotlib
 pandas

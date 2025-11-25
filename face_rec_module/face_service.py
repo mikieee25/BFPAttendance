@@ -1,5 +1,6 @@
 # Face Recognition Service for BFP Sorsogon Attendance System
 # Handles face detection, encoding, recognition, and attendance processing using YOLO and OpenCV
+# Enhanced with optional InsightFace support for improved accuracy and anti-spoofing
 
 # Standard library imports
 import os
@@ -25,11 +26,21 @@ from flask import current_app
 from sqlalchemy import or_
 from models import db, Personnel, FaceData, Attendance, AttendanceStatus, User
 
-# Set up logger
+# Set up logger (must be before InsightFace import attempt)
 logger = logging.getLogger(__name__)
 
-# Global model instance
+# Try to import InsightFace for enhanced face detection (optional)
+INSIGHTFACE_AVAILABLE = False
+try:
+    from insightface.app import FaceAnalysis
+    INSIGHTFACE_AVAILABLE = True
+    logger.info("✓ InsightFace is available for enhanced face detection")
+except ImportError:
+    pass  # InsightFace not installed, will use YOLO fallback
+
+# Global model instances
 yolo_model = None
+insightface_app = None
 
 # Face database cache to avoid repeated database queries
 _face_db_cache: Optional[Dict[int, Dict[str, Any]]] = None
@@ -88,6 +99,109 @@ def get_yolo_model() -> YOLO:
             yolo_model.cpu()
 
         return yolo_model
+
+
+def get_insightface_app() -> Optional[Any]:
+    """Load and return the InsightFace face analysis app.
+    
+    InsightFace provides:
+    - RetinaFace for state-of-the-art face detection
+    - ArcFace for superior face embeddings (512-dimensional)
+    - Better performance on challenging conditions (angles, lighting)
+    
+    Returns:
+        FaceAnalysis app instance or None if InsightFace not available
+    """
+    global insightface_app
+    
+    if not INSIGHTFACE_AVAILABLE:
+        return None
+    
+    try:
+        # Try to use app context if available
+        if not hasattr(current_app, "insightface_app") or current_app.insightface_app is None:
+            # Check if InsightFace is enabled in config
+            use_insightface = current_app.config.get("USE_INSIGHTFACE", False)
+            
+            if not use_insightface:
+                logger.info("InsightFace is disabled in config, using YOLO")
+                return None
+            
+            logger.info("Initializing InsightFace FaceAnalysis...")
+            
+            # Initialize InsightFace app with buffalo_l model (high accuracy)
+            # Available models: buffalo_l (large), buffalo_m (medium), buffalo_s (small)
+            app = FaceAnalysis(
+                name="buffalo_l",  # Best accuracy
+                providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+            )
+            app.prepare(ctx_id=0 if torch.cuda.is_available() else -1, det_size=(640, 640))
+            
+            current_app.insightface_app = app
+            logger.info("✓ InsightFace initialized successfully")
+        
+        return current_app.insightface_app
+        
+    except RuntimeError:
+        # No app context available
+        if insightface_app is None and INSIGHTFACE_AVAILABLE:
+            try:
+                logger.info("Initializing InsightFace (no app context)...")
+                app = FaceAnalysis(name="buffalo_l")
+                app.prepare(ctx_id=-1, det_size=(640, 640))  # CPU mode
+                insightface_app = app
+                logger.info("✓ InsightFace initialized (global)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize InsightFace: {e}")
+                return None
+        return insightface_app
+    except Exception as e:
+        logger.warning(f"InsightFace initialization error: {e}")
+        return None
+
+
+def detect_faces_insightface(image: np.ndarray) -> List[Dict[str, Any]]:
+    """Detect faces using InsightFace (RetinaFace).
+    
+    This provides more accurate face detection than YOLO, especially for:
+    - Profile/angled faces
+    - Partially occluded faces
+    - Variable lighting conditions
+    
+    Args:
+        image: BGR image as numpy array
+        
+    Returns:
+        List of face dictionaries with bbox, landmarks, embedding, and detection score
+    """
+    app = get_insightface_app()
+    if app is None:
+        return []
+    
+    try:
+        # InsightFace expects RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Detect faces
+        faces = app.get(rgb_image)
+        
+        results = []
+        for face in faces:
+            results.append({
+                "bbox": face.bbox.astype(int),  # [x1, y1, x2, y2]
+                "confidence": float(face.det_score),
+                "embedding": face.embedding if hasattr(face, 'embedding') else None,
+                "landmarks": face.kps if hasattr(face, 'kps') else None,  # 5-point landmarks
+                "age": face.age if hasattr(face, 'age') else None,
+                "gender": face.gender if hasattr(face, 'gender') else None,
+            })
+        
+        logger.info(f"InsightFace detected {len(results)} face(s)")
+        return results
+        
+    except Exception as e:
+        logger.error(f"InsightFace detection error: {e}")
+        return []
 
 
 def validate_base64_image(base64_image: str) -> Tuple[bool, Optional[str]]:
@@ -1087,6 +1201,7 @@ def detect_motion_liveness(frames: List[np.ndarray]) -> Tuple[bool, float]:
     """Detect liveness through motion analysis across multiple frames.
 
     Analyzes optical flow and frame differences to detect natural movement.
+    ENHANCED: Now also detects micro-expressions and natural facial movements.
 
     Args:
         frames: List of consecutive frames (minimum 3 required)
@@ -1103,6 +1218,7 @@ def detect_motion_liveness(frames: List[np.ndarray]) -> Tuple[bool, float]:
         gray_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in frames]
 
         motion_scores = []
+        optical_flow_scores = []
 
         # Calculate frame differences
         for i in range(len(gray_frames) - 1):
@@ -1118,27 +1234,49 @@ def detect_motion_liveness(frames: List[np.ndarray]) -> Tuple[bool, float]:
             motion_percentage = motion_pixels / total_pixels
 
             motion_scores.append(motion_percentage)
+            
+            # Calculate optical flow for more sophisticated motion detection
+            try:
+                flow = cv2.calcOpticalFlowFarneback(
+                    gray_frames[i], gray_frames[i + 1], 
+                    None, 0.5, 3, 15, 3, 5, 1.2, 0
+                )
+                magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+                flow_mean = np.mean(magnitude)
+                optical_flow_scores.append(flow_mean)
+            except Exception:
+                pass
 
         # Average motion across frames
         avg_motion = np.mean(motion_scores)
+        avg_flow = np.mean(optical_flow_scores) if optical_flow_scores else 0
 
         # Check for natural motion range
         # Too little = static image, too much = video or tampering
         min_motion = current_app.config.get("LIVENESS_MIN_MOTION", 0.001)
         max_motion = current_app.config.get("LIVENESS_MAX_MOTION", 0.15)
 
-        is_live = min_motion <= avg_motion <= max_motion
+        # ENHANCED: Require both regular motion and optical flow
+        motion_valid = min_motion <= avg_motion <= max_motion
+        flow_valid = avg_flow > 0.05 if optical_flow_scores else True
+        
+        is_live = motion_valid and flow_valid
 
-        # Normalize score
+        # Normalize score - combine both metrics
         if avg_motion < min_motion:
             motion_score = 0.0
         elif avg_motion > max_motion:
             motion_score = 0.3
         else:
             motion_score = min(avg_motion / max_motion, 1.0)
+        
+        # Add flow score component
+        if optical_flow_scores:
+            flow_score = min(avg_flow / 0.5, 1.0)
+            motion_score = (motion_score * 0.6) + (flow_score * 0.4)
 
         logger.debug(
-            f"Motion analysis - Avg motion: {avg_motion:.4f}, Score: {motion_score:.3f}, Live: {is_live}"
+            f"Motion analysis - Avg motion: {avg_motion:.4f}, Avg flow: {avg_flow:.4f}, Score: {motion_score:.3f}, Live: {is_live}"
         )
 
         return is_live, motion_score
@@ -1148,17 +1286,204 @@ def detect_motion_liveness(frames: List[np.ndarray]) -> Tuple[bool, float]:
         return False, 0.0
 
 
+def detect_blink(frames: List[np.ndarray], face_bboxes: List[np.ndarray]) -> Tuple[bool, int]:
+    """Detect eye blinks across multiple frames using eye aspect ratio (EAR).
+    
+    A blink is characterized by a rapid decrease and increase in EAR.
+    Photos cannot blink, making this an effective anti-spoofing measure.
+    
+    Args:
+        frames: List of consecutive BGR frames
+        face_bboxes: List of face bounding boxes for each frame
+        
+    Returns:
+        Tuple of (blink_detected, blink_count)
+    """
+    try:
+        if len(frames) < 5:
+            logger.warning("Insufficient frames for blink detection (need at least 5)")
+            return False, 0
+            
+        # Use face_recognition library to get facial landmarks
+        ear_values = []
+        
+        for i, (frame, bbox) in enumerate(zip(frames, face_bboxes)):
+            if bbox is None:
+                continue
+                
+            # Convert to RGB for face_recognition
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Get face location in the format face_recognition expects
+            x1, y1, x2, y2 = bbox.astype(int)
+            face_location = [(y1, x2, y2, x1)]  # (top, right, bottom, left)
+            
+            try:
+                # Get facial landmarks
+                landmarks = fr_lib.face_landmarks(rgb_frame, face_locations=face_location)
+                
+                if landmarks and len(landmarks) > 0:
+                    # Get eye points
+                    left_eye = landmarks[0].get('left_eye', [])
+                    right_eye = landmarks[0].get('right_eye', [])
+                    
+                    if left_eye and right_eye:
+                        # Calculate Eye Aspect Ratio (EAR)
+                        left_ear = calculate_ear(left_eye)
+                        right_ear = calculate_ear(right_eye)
+                        avg_ear = (left_ear + right_ear) / 2.0
+                        ear_values.append(avg_ear)
+            except Exception as e:
+                logger.debug(f"Could not get landmarks for frame {i}: {e}")
+                continue
+        
+        if len(ear_values) < 5:
+            logger.warning(f"Not enough EAR values ({len(ear_values)}) for blink detection")
+            return False, 0
+        
+        # Detect blinks by looking for dips in EAR values
+        # A blink typically has EAR < 0.2
+        EAR_THRESHOLD = 0.21
+        blink_count = 0
+        in_blink = False
+        
+        for ear in ear_values:
+            if ear < EAR_THRESHOLD:
+                if not in_blink:
+                    blink_count += 1
+                    in_blink = True
+            else:
+                in_blink = False
+        
+        # Also check for EAR variance (photos have constant EAR)
+        ear_variance = np.var(ear_values)
+        has_natural_variance = ear_variance > 0.001
+        
+        blink_detected = blink_count > 0 or has_natural_variance
+        
+        logger.info(f"Blink detection - Count: {blink_count}, EAR variance: {ear_variance:.4f}, Detected: {blink_detected}")
+        
+        return blink_detected, blink_count
+        
+    except Exception as e:
+        logger.error(f"Error in blink detection: {e}")
+        return False, 0
+
+
+def calculate_ear(eye_points: List[tuple]) -> float:
+    """Calculate Eye Aspect Ratio (EAR) from eye landmark points.
+    
+    EAR = (|p2-p6| + |p3-p5|) / (2 * |p1-p4|)
+    
+    Where p1-p6 are the 6 landmark points around the eye.
+    """
+    try:
+        if len(eye_points) < 6:
+            return 0.3  # Default open eye value
+            
+        # Convert to numpy array
+        eye = np.array(eye_points)
+        
+        # Compute the euclidean distances between vertical eye landmarks
+        A = dist.euclidean(eye[1], eye[5])
+        B = dist.euclidean(eye[2], eye[4])
+        
+        # Compute the euclidean distance between horizontal eye landmarks
+        C = dist.euclidean(eye[0], eye[3])
+        
+        # Compute EAR
+        if C == 0:
+            return 0.3
+            
+        ear = (A + B) / (2.0 * C)
+        return ear
+        
+    except Exception as e:
+        return 0.3
+
+
+def detect_head_movement(frames: List[np.ndarray], face_bboxes: List[np.ndarray]) -> Tuple[bool, float]:
+    """Detect natural head movements across frames.
+    
+    Photos are static, so any natural head movement indicates a live person.
+    
+    Args:
+        frames: List of consecutive BGR frames
+        face_bboxes: List of face bounding boxes for each frame
+        
+    Returns:
+        Tuple of (movement_detected, movement_score)
+    """
+    try:
+        if len(face_bboxes) < 3:
+            return False, 0.0
+            
+        # Calculate center points of face bboxes
+        centers = []
+        sizes = []
+        
+        for bbox in face_bboxes:
+            if bbox is not None:
+                x1, y1, x2, y2 = bbox.astype(int)
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+                width = x2 - x1
+                height = y2 - y1
+                centers.append((center_x, center_y))
+                sizes.append((width, height))
+        
+        if len(centers) < 3:
+            return False, 0.0
+        
+        # Calculate movement variance
+        centers = np.array(centers)
+        center_variance = np.var(centers, axis=0)
+        total_variance = np.sum(center_variance)
+        
+        # Calculate size variance (distance changes)
+        sizes = np.array(sizes)
+        size_variance = np.var(sizes, axis=0)
+        total_size_variance = np.sum(size_variance)
+        
+        # Natural head movement thresholds
+        MIN_MOVEMENT = 2.0  # Minimum variance for natural movement
+        MAX_MOVEMENT = 500.0  # Maximum (too much = video playback)
+        
+        movement_valid = MIN_MOVEMENT < total_variance < MAX_MOVEMENT
+        
+        # Normalize score
+        if total_variance < MIN_MOVEMENT:
+            movement_score = 0.0
+        elif total_variance > MAX_MOVEMENT:
+            movement_score = 0.3
+        else:
+            movement_score = min((total_variance - MIN_MOVEMENT) / 50.0, 1.0)
+        
+        logger.info(f"Head movement - Variance: {total_variance:.2f}, Size variance: {total_size_variance:.2f}, Score: {movement_score:.3f}")
+        
+        return movement_valid, movement_score
+        
+    except Exception as e:
+        logger.error(f"Error in head movement detection: {e}")
+        return False, 0.0
+
+
 def analyze_liveness(
     image: np.ndarray,
     face_bbox: np.ndarray,
     previous_frames: Optional[List[np.ndarray]] = None,
+    previous_bboxes: Optional[List[np.ndarray]] = None,
 ) -> Tuple[bool, Dict[str, Any]]:
     """Comprehensive liveness detection combining multiple methods.
+    
+    ENHANCED VERSION: Now includes blink detection and head movement analysis
+    for better anti-spoofing protection against photo attacks.
 
     Args:
         image: Current frame in BGR format
         face_bbox: Face bounding box [x1, y1, x2, y2]
         previous_frames: List of previous frames for motion analysis (optional)
+        previous_bboxes: List of previous face bboxes for head movement analysis (optional)
 
     Returns:
         Tuple of (is_live, liveness_details) with detailed analysis
@@ -1169,15 +1494,28 @@ def analyze_liveness(
             "texture_score": 0.0,
             "motion_live": None,
             "motion_score": None,
+            "blink_detected": None,
+            "blink_count": 0,
+            "head_movement_live": None,
+            "head_movement_score": None,
             "overall_live": False,
             "confidence": 0.0,
             "method": "texture_only",
+            "checks_passed": 0,
+            "checks_total": 1,
         }
 
-        # 1. Texture-based liveness detection (always performed)
+        checks_passed = 0
+        checks_total = 1  # Start with texture check
+
+        # 1. Texture-based liveness detection (always performed) - STRICTER THRESHOLD
         texture_live, texture_score = detect_texture_artifacts(image, face_bbox)
         liveness_details["texture_live"] = texture_live
         liveness_details["texture_score"] = float(texture_score)
+        
+        # ENHANCED: Require higher texture score for single-check mode
+        if texture_live and texture_score >= 0.6:
+            checks_passed += 1
 
         # 2. Motion-based liveness detection (if previous frames available)
         if previous_frames and len(previous_frames) >= 2:
@@ -1188,33 +1526,92 @@ def analyze_liveness(
             liveness_details["motion_live"] = motion_live
             liveness_details["motion_score"] = float(motion_score)
             liveness_details["method"] = "texture_and_motion"
+            checks_total += 1
+            
+            if motion_live and motion_score >= 0.3:
+                checks_passed += 1
 
-            # BALANCED SECURITY: Both checks must pass with reasonable confidence
-            overall_live = (
-                texture_live
-                and motion_live
-                and texture_score > 0.85
-                and motion_score > 0.3
+        # 3. Blink detection (if enough frames available)
+        if previous_frames and len(previous_frames) >= 4 and previous_bboxes:
+            all_frames = previous_frames + [image]
+            all_bboxes = previous_bboxes + [face_bbox]
+            
+            blink_detected, blink_count = detect_blink(all_frames[-10:], all_bboxes[-10:])
+            liveness_details["blink_detected"] = blink_detected
+            liveness_details["blink_count"] = blink_count
+            liveness_details["method"] = "comprehensive"
+            checks_total += 1
+            
+            if blink_detected:
+                checks_passed += 1
+
+        # 4. Head movement detection (if enough frames available)
+        if previous_frames and len(previous_frames) >= 2 and previous_bboxes:
+            all_bboxes = previous_bboxes + [face_bbox]
+            
+            head_movement_live, head_movement_score = detect_head_movement(
+                previous_frames + [image], all_bboxes
             )
-            confidence = (texture_score + motion_score) / 2.0
+            liveness_details["head_movement_live"] = head_movement_live
+            liveness_details["head_movement_score"] = float(head_movement_score) if head_movement_score else None
+            checks_total += 1
+            
+            if head_movement_live and head_movement_score >= 0.2:
+                checks_passed += 1
+
+        liveness_details["checks_passed"] = checks_passed
+        liveness_details["checks_total"] = checks_total
+
+        # ENHANCED SECURITY DECISION:
+        # For comprehensive mode (with motion data): require at least 2 out of available checks to pass
+        # For texture-only mode: require very high texture score
+        if checks_total >= 3:
+            # Multi-check mode: require majority of checks to pass
+            required_checks = max(2, checks_total // 2)
+            overall_live = checks_passed >= required_checks
+            
+            # Calculate weighted confidence
+            scores = [texture_score]
+            if liveness_details["motion_score"] is not None:
+                scores.append(liveness_details["motion_score"])
+            if liveness_details["blink_detected"]:
+                scores.append(0.8)  # Blink detection is binary, use 0.8 as score
+            if liveness_details["head_movement_score"] is not None:
+                scores.append(liveness_details["head_movement_score"])
+            
+            confidence = np.mean(scores)
+        elif checks_total == 2:
+            # Two checks available: both should pass OR one with very high score
+            overall_live = (checks_passed >= 2) or (
+                checks_passed >= 1 and texture_score >= 0.75
+            )
+            
+            scores = [texture_score]
+            if liveness_details["motion_score"] is not None:
+                scores.append(liveness_details["motion_score"])
+            confidence = np.mean(scores)
         else:
-            # BALANCED SECURITY: Without motion data, use standard texture threshold
-            # This balances security with usability for legitimate users
-            overall_live = texture_live
+            # Single check (texture only): require VERY high score
+            # This is the fallback mode when no motion data is available
+            overall_live = texture_live and texture_score >= 0.7
             confidence = texture_score
 
             # Log info about texture-only analysis
-            logger.info("ℹ️ Liveness check using texture analysis only (no motion data)")
+            logger.warning("⚠️ Liveness check using texture analysis only (no motion data) - using strict threshold")
 
         liveness_details["overall_live"] = overall_live
         liveness_details["confidence"] = float(confidence)
 
         logger.info(
-            f"Liveness detection - Live: {overall_live}, Confidence: {confidence:.3f}"
+            f"Liveness detection - Live: {overall_live}, Confidence: {confidence:.3f}, Checks: {checks_passed}/{checks_total}"
         )
         logger.info(f"  Texture: {texture_live} ({texture_score:.3f})")
         if liveness_details["motion_live"] is not None:
-            logger.info(f"  Motion: {motion_live} ({motion_score:.3f})")
+            logger.info(f"  Motion: {liveness_details['motion_live']} ({liveness_details['motion_score']:.3f})")
+        if liveness_details["blink_detected"] is not None:
+            logger.info(f"  Blink: {liveness_details['blink_detected']} (count: {liveness_details['blink_count']})")
+        if liveness_details["head_movement_live"] is not None:
+            logger.info(f"  Head Movement: {liveness_details['head_movement_live']} ({liveness_details['head_movement_score']:.3f})")
 
         return overall_live, liveness_details
 

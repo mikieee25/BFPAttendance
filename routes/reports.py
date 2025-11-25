@@ -59,43 +59,6 @@ def index():
         Attendance.date >= current_month_start
     ).count()
 
-    # Calculate weekly attendance rates for this month's trend
-    weekly_data = []
-    if total_personnel > 0:
-        # Divide the month into 4 weeks
-        for week_num in range(4):
-            week_start = current_month_start + timedelta(days=week_num * 7)
-            week_end = week_start + timedelta(days=6)
-
-            # Don't go beyond today
-            if week_end > today:
-                week_end = today
-
-            # Skip if week hasn't started yet
-            if week_start > today:
-                continue
-
-            # Count present and late for this week
-            week_present = attendance_query.filter(
-                Attendance.date >= week_start,
-                Attendance.date <= week_end,
-                Attendance.status.in_(
-                    [AttendanceStatus.PRESENT, AttendanceStatus.LATE]
-                ),
-            ).count()
-
-            # Calculate expected attendance for this week
-            days_in_week = (week_end - week_start).days + 1
-            expected = total_personnel * days_in_week
-
-            # Calculate attendance rate
-            rate = round((week_present / expected * 100) if expected > 0 else 0, 1)
-            weekly_data.append(rate)
-
-    # Ensure we have at least some data (fill with 0 if no data)
-    while len(weekly_data) < 4:
-        weekly_data.append(0)
-
     stats = {
         "total_personnel": total_personnel,
         "today_attendance": today_attendance,
@@ -103,10 +66,12 @@ def index():
         "today_late": today_late,
         "today_absent": today_absent,
         "month_attendance": month_attendance,
-        "weekly_rates": weekly_data,
     }
 
-    return render_template("reports/index.html", stats=stats)
+    # Get all stations for the dropdown (admin only)
+    stations = User.query.all() if current_user.is_admin else [current_user]
+
+    return render_template("reports/index.html", stats=stats, stations=stations)
 
 
 @reports_bp.route("/attendance-summary")
