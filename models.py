@@ -101,8 +101,13 @@ class Personnel(db.Model):
     # Shift schedule fields
     shift_start_time = db.Column(db.Time, nullable=True)  # e.g., 08:00
     shift_end_time = db.Column(db.Time, nullable=True)  # e.g., 17:00
-    is_shifting = db.Column(db.Boolean, default=False)  # True if on 15-day rotation
-    shift_start_date = db.Column(db.Date, nullable=True)  # Date when shift cycle started
+    is_shifting = db.Column(db.Boolean, default=False)  # True if on rotation shift
+    shift_start_date = db.Column(
+        db.Date, nullable=True
+    )  # Date when shift cycle started
+    shift_duration_days = db.Column(
+        db.Integer, default=15
+    )  # Number of days per shift cycle (e.g., 15 days on, 15 days off)
 
     # Metadata
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
@@ -132,32 +137,37 @@ class Personnel(db.Model):
 
     def is_on_duty(self, check_date=None):
         """Check if personnel is on duty on a given date.
-        
-        For shifting personnel (15 days on, 15 days off):
+
+        For shifting personnel (X days on, X days off):
         - Calculate which day of the cycle the check_date falls on
-        - Days 1-15 are ON duty, days 16-30 are OFF duty
-        
+        - Uses shift_duration_days to determine cycle length
+        - First half of cycle is ON duty, second half is OFF duty
+
         Returns True if on duty, False if off duty
         """
         if check_date is None:
             check_date = datetime.now().date()
-        
+
         # Non-shifting personnel are always on duty
         if not self.is_shifting:
             return True
-        
+
         # If no shift start date set, assume always on duty
         if not self.shift_start_date:
             return True
-        
+
+        # Get shift duration (default to 15 if not set)
+        duration = self.shift_duration_days or 15
+
         # Calculate days since shift cycle started
         days_since_start = (check_date - self.shift_start_date).days
-        
-        # Each cycle is 30 days (15 on, 15 off)
-        day_in_cycle = days_since_start % 30
-        
-        # Days 0-14 (first 15 days) are ON duty
-        return day_in_cycle < 15
+
+        # Each full cycle is 2x duration (e.g., 15 on + 15 off = 30 days)
+        full_cycle_length = duration * 2
+        day_in_cycle = days_since_start % full_cycle_length
+
+        # First 'duration' days are ON duty
+        return day_in_cycle < duration
 
     def __repr__(self):
         return f"<Personnel {self.full_name}>"

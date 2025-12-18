@@ -39,25 +39,28 @@ def index():
     Only shows active personnel by default.
     """
     # Get show_inactive parameter
-    show_inactive = request.args.get('show_inactive', 'false') == 'true'
-    
+    show_inactive = request.args.get("show_inactive", "false") == "true"
+
     # Get personnel based on user role and station access
     if current_user.is_admin:
         query = Personnel.query
     else:
         query = Personnel.query.filter_by(station_id=current_user.id)
-    
+
     # Filter by active status unless show_inactive is True
     if not show_inactive:
         query = query.filter_by(is_active=True)
-    
+
     personnel = query.all()
 
     # Get all stations for the dropdown (admin only)
     stations = User.query.all() if current_user.is_admin else [current_user]
 
     return render_template(
-        "personnel/index.html", personnel=personnel, stations=stations, show_inactive=show_inactive
+        "personnel/index.html",
+        personnel=personnel,
+        stations=stations,
+        show_inactive=show_inactive,
     )
 
 
@@ -142,24 +145,38 @@ def add():
             shift_end_time = request.form.get("shift_end_time", "").strip()
             is_shifting = request.form.get("is_shifting") == "on"
             shift_start_date = request.form.get("shift_start_date", "").strip()
+            shift_duration_days = request.form.get("shift_duration_days", "").strip()
 
             # Parse time values
             parsed_shift_start = None
             parsed_shift_end = None
             parsed_shift_date = None
-            
+            parsed_duration = 15  # Default to 15 days
+
             if shift_start_time:
                 from datetime import time
-                hours, minutes = map(int, shift_start_time.split(':'))
+
+                hours, minutes = map(int, shift_start_time.split(":"))
                 parsed_shift_start = time(hours, minutes)
-            
+
             if shift_end_time:
                 from datetime import time
-                hours, minutes = map(int, shift_end_time.split(':'))
+
+                hours, minutes = map(int, shift_end_time.split(":"))
                 parsed_shift_end = time(hours, minutes)
-            
+
             if shift_start_date and is_shifting:
-                parsed_shift_date = datetime.strptime(shift_start_date, "%Y-%m-%d").date()
+                parsed_shift_date = datetime.strptime(
+                    shift_start_date, "%Y-%m-%d"
+                ).date()
+
+            if shift_duration_days and is_shifting:
+                try:
+                    parsed_duration = int(shift_duration_days)
+                    # Ensure reasonable bounds
+                    parsed_duration = max(1, min(60, parsed_duration))
+                except ValueError:
+                    parsed_duration = 15
 
             # Create new personnel
             new_personnel = Personnel(
@@ -171,6 +188,7 @@ def add():
                 shift_end_time=parsed_shift_end,
                 is_shifting=is_shifting,
                 shift_start_date=parsed_shift_date,
+                shift_duration_days=parsed_duration if is_shifting else None,
             )
 
             db.session.add(new_personnel)
@@ -245,28 +263,43 @@ def edit(personnel_id):
         shift_end_time = request.form.get("shift_end_time", "").strip()
         is_shifting = request.form.get("is_shifting") == "on"
         shift_start_date = request.form.get("shift_start_date", "").strip()
+        shift_duration_days = request.form.get("shift_duration_days", "").strip()
 
         # Parse time values
         if shift_start_time:
             from datetime import time
-            hours, minutes = map(int, shift_start_time.split(':'))
+
+            hours, minutes = map(int, shift_start_time.split(":"))
             personnel.shift_start_time = time(hours, minutes)
         else:
             personnel.shift_start_time = None
-        
+
         if shift_end_time:
             from datetime import time
-            hours, minutes = map(int, shift_end_time.split(':'))
+
+            hours, minutes = map(int, shift_end_time.split(":"))
             personnel.shift_end_time = time(hours, minutes)
         else:
             personnel.shift_end_time = None
-        
+
         personnel.is_shifting = is_shifting
-        
+
         if shift_start_date and is_shifting:
-            personnel.shift_start_date = datetime.strptime(shift_start_date, "%Y-%m-%d").date()
+            personnel.shift_start_date = datetime.strptime(
+                shift_start_date, "%Y-%m-%d"
+            ).date()
         elif not is_shifting:
             personnel.shift_start_date = None
+
+        # Handle shift duration
+        if shift_duration_days and is_shifting:
+            try:
+                duration = int(shift_duration_days)
+                personnel.shift_duration_days = max(1, min(60, duration))
+            except ValueError:
+                personnel.shift_duration_days = 15
+        elif not is_shifting:
+            personnel.shift_duration_days = None
 
         # Log activity
         activity = ActivityLog(
@@ -295,7 +328,7 @@ def edit(personnel_id):
 @login_required
 def archive(personnel_id):
     """Archive a personnel record (soft delete).
-    
+
     Personnel records are never truly deleted to maintain attendance history.
     Instead, they are marked as inactive.
     """
@@ -322,7 +355,10 @@ def archive(personnel_id):
         db.session.add(activity)
         db.session.commit()
 
-        flash(f"Personnel {name} archived successfully. Their records are preserved.", "success")
+        flash(
+            f"Personnel {name} archived successfully. Their records are preserved.",
+            "success",
+        )
         return redirect(url_for("personnel.index"))
 
     except Exception as e:
@@ -469,36 +505,44 @@ def api_register_face(personnel_id):
 def api_data():
     """DataTables API endpoint"""
     # Get show_inactive parameter
-    show_inactive = request.args.get('show_inactive', 'false') == 'true'
-    
+    show_inactive = request.args.get("show_inactive", "false") == "true"
+
     # Get personnel based on user role
     if current_user.is_admin:
         query = Personnel.query
     else:
         query = Personnel.query.filter_by(station_id=current_user.id)
-    
+
     # Filter by active status unless show_inactive is True
     if not show_inactive:
         query = query.filter_by(is_active=True)
-    
+
     personnel = query.all()
 
     data = []
     for p in personnel:
         face_count = FaceData.query.filter_by(personnel_id=p.id).count()
-        
+
         # Build status badge
-        status_badge = '<span class="badge bg-success">Active</span>' if p.is_active else '<span class="badge bg-secondary">Archived</span>'
-        
+        status_badge = (
+            '<span class="badge bg-success">Active</span>'
+            if p.is_active
+            else '<span class="badge bg-secondary">Archived</span>'
+        )
+
         # Build shift info
         shift_info = ""
         if p.is_shifting:
             on_duty = p.is_on_duty()
             shift_info = '<span class="badge bg-info">Shifting</span> '
-            shift_info += '<span class="badge bg-success">On Duty</span>' if on_duty else '<span class="badge bg-warning">Off Duty</span>'
+            shift_info += (
+                '<span class="badge bg-success">On Duty</span>'
+                if on_duty
+                else '<span class="badge bg-warning">Off Duty</span>'
+            )
         elif p.shift_start_time and p.shift_end_time:
             shift_info = f'{p.shift_start_time.strftime("%H:%M")} - {p.shift_end_time.strftime("%H:%M")}'
-        
+
         # Build action buttons based on active status
         if p.is_active:
             action_buttons = f"""
@@ -528,7 +572,7 @@ def api_data():
                     </button>
                 </form>
             """
-        
+
         data.append(
             {
                 "id": p.id,

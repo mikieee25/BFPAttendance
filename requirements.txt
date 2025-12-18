@@ -19,7 +19,6 @@ opencv-python
 numpy
 Pillow
 scipy
-face-recognition  # Deep learning face recognition with dlib
 
 # Enhanced Face Detection
 insightface  

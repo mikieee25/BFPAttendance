@@ -205,15 +205,18 @@
                     {{ 'checked' if personnel.is_shifting else '' }}
                   />
                   <label class="form-check-label" for="is_shifting">
-                    <strong>15-Day Rotation Shift</strong>
+                    <strong>Rotation Shift</strong>
                   </label>
                 </div>
                 <small class="form-text text-muted">
-                  Enable for 15 days on / 15 days off schedule
+                  Enable for rotation schedule (X days on / X days off)
                 </small>
               </div>
             </div>
-            <div class="col-md-6" id="shift_start_date_container" style="{{ 'display: block;' if personnel.is_shifting else 'display: none;' }}">
+          </div>
+
+          <div class="row" id="shift_date_row" style="{{ 'display: flex;' if personnel.is_shifting else 'display: none;' }}">
+            <div class="col-md-6">
               <div class="mb-3">
                 <label for="shift_start_date" class="form-label">
                   Shift Cycle Start Date
@@ -226,7 +229,26 @@
                   value="{{ personnel.shift_start_date.strftime('%Y-%m-%d') if personnel.shift_start_date else '' }}"
                 />
                 <small class="form-text text-muted">
-                  When did their current shift cycle begin?
+                  When does their current shift cycle begin?
+                </small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_duration_days" class="form-label">
+                  Shift Duration (Days)
+                </label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="shift_duration_days"
+                  name="shift_duration_days"
+                  min="1"
+                  max="60"
+                  value="{{ personnel.shift_duration_days or 15 }}"
+                />
+                <small class="form-text text-muted">
+                  Number of days ON duty (same for OFF duty)
                 </small>
               </div>
             </div>
@@ -238,9 +260,9 @@
               <div class="alert {{ 'alert-success' if personnel.is_on_duty() else 'alert-warning' }}" role="alert">
                 <i class="fas fa-info-circle me-2"></i>
                 {% if personnel.is_on_duty() %}
-                <strong>Currently ON DUTY</strong> - Personnel is in their active 15-day shift period.
+                <strong>Currently ON DUTY</strong> - Personnel is in their active {{ personnel.shift_duration_days or 15 }}-day shift period.
                 {% else %}
-                <strong>Currently OFF DUTY</strong> - Personnel is in their 15-day off period.
+                <strong>Currently OFF DUTY</strong> - Personnel is in their {{ personnel.shift_duration_days or 15 }}-day off period.
                 {% endif %}
               </div>
             </div>
@@ -408,11 +430,12 @@ document.getElementById('confirmArchiveBtn').addEventListener('click', async fun
 // Toggle shifting options visibility
 function toggleShiftingOptions() {
     const isShifting = document.getElementById('is_shifting').checked;
-    const container = document.getElementById('shift_start_date_container');
+    const dateRow = document.getElementById('shift_date_row');
+    
     if (isShifting) {
-        container.style.display = 'block';
+        dateRow.style.display = 'flex';
     } else {
-        container.style.display = 'none';
+        dateRow.style.display = 'none';
     }
 }
 </script>
