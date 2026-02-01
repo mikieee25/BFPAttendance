@@ -1,19 +1,28 @@
 # Core Python libraries
+import logging
 import os
 from datetime import datetime
 
 # Flask core framework and utilities
-from flask import Flask, render_template, redirect, url_for
-from flask_login import LoginManager, current_user
+from flask import Flask, redirect, render_template, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_login import LoginManager, current_user
 from werkzeug.security import generate_password_hash
-
-# Database models and enums
-from models import db, User, StationType, AttendanceStatus
 
 # Face recognition service (imported but not used in app.py - available for blueprints)
 from face_rec_module.face_service import cleanup_old_attendance_images
+
+# Database models and enums
+from models import AttendanceStatus, StationType, User, db
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("bfp_attendance.log"), logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
 
 
 def create_app():
@@ -21,7 +30,21 @@ def create_app():
     app = Flask(__name__)
 
     # Application configuration settings
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here")
+    # Security: Require SECRET_KEY in production
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        if app.debug:
+            logger.warning(
+                "SECRET_KEY not set! Using default for development. "
+                "Set SECRET_KEY environment variable for production!"
+            )
+            secret_key = "dev-secret-key-change-in-production"
+        else:
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set in production. "
+                "Generate a secure key with: python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
+    app.config["SECRET_KEY"] = secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL", "mysql+pymysql://root:@localhost/bfp_sorsogon_attendance"
     )
@@ -46,11 +69,13 @@ def create_app():
     app.config["WORK_START_TIME"] = "08:00"
     app.config["ATTENDANCE_COOLDOWN"] = 5  # seconds
     app.config["ATTENDANCE_IMAGE_RETENTION_DAYS"] = 7
-    
+
     # Enhanced face detection settings (InsightFace)
     # Set to True to use InsightFace (requires: pip install insightface onnxruntime)
     # InsightFace provides better accuracy with RetinaFace detection and ArcFace embeddings
-    app.config["USE_INSIGHTFACE"] = os.environ.get("USE_INSIGHTFACE", "false").lower() == "true"
+    app.config["USE_INSIGHTFACE"] = (
+        os.environ.get("USE_INSIGHTFACE", "false").lower() == "true"
+    )
 
     # Liveness detection settings
     app.config["LIVENESS_TEXTURE_THRESHOLD"] = (
@@ -98,14 +123,14 @@ def create_app():
     app.limiter = limiter
 
     # Register blueprints
+    from routes.api import api_bp
+    from routes.attendance import attendance_bp
     from routes.auth import auth_bp
     from routes.dashboard import dashboard_bp
-    from routes.personnel import personnel_bp
-    from routes.attendance import attendance_bp
-    from routes.reports import reports_bp
     from routes.pending import pending_bp
+    from routes.personnel import personnel_bp
     from routes.profile import profile_bp
-    from routes.api import api_bp
+    from routes.reports import reports_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
@@ -176,10 +201,14 @@ def create_app():
                 password=generate_password_hash("admin123"),
                 station_type=StationType.CENTRAL,
                 is_admin=True,
+                must_change_password=True,  # Force password change on first login
             )
             db.session.add(admin)
             db.session.commit()
-            print("Default admin user created: admin/admin123")
+            logger.warning(
+                "Default admin user created with username 'admin' and password 'admin123'. "
+                "IMPORTANT: Change this password immediately after first login!"
+            )
 
     return app
 

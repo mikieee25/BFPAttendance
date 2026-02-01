@@ -1,20 +1,22 @@
-from flask import (
-    Blueprint,
-    render_template,
-    request,
-    jsonify,
-    redirect,
-    url_for,
-    flash,
-    current_app,
-)
-from flask_login import login_required, current_user
-from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
 import os
 from datetime import datetime, timedelta
 
-from models import db, User, Personnel, Attendance, ActivityLog, StationType
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask_login import current_user, login_required
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+from models import ActivityLog, Attendance, Personnel, StationType, User, db
+from utils import validate_password
 
 profile_bp = Blueprint("profile", __name__)
 
@@ -169,22 +171,38 @@ def change_password():
         new_password = request.form["new_password"]
         confirm_password = request.form["confirm_password"]
 
-        # Validate current password
-        if not check_password_hash(current_user.password, current_password):
-            flash("Current password is incorrect", "error")
-            return render_template("profile/change_password.html")
+        # Validate current password (skip for forced password changes)
+        if not current_user.must_change_password:
+            if not check_password_hash(current_user.password, current_password):
+                flash("Current password is incorrect", "error")
+                return render_template(
+                    "profile/change_password.html",
+                    must_change=current_user.must_change_password,
+                )
 
-        # Validate new password
+        # Validate new password match
         if new_password != confirm_password:
             flash("New passwords do not match", "error")
-            return render_template("profile/change_password.html")
+            return render_template(
+                "profile/change_password.html",
+                must_change=current_user.must_change_password,
+            )
 
-        if len(new_password) < 6:
-            flash("New password must be at least 6 characters long", "error")
-            return render_template("profile/change_password.html")
+        # Validate password strength using security utility
+        is_valid, message = validate_password(new_password)
+        if not is_valid:
+            flash(message, "error")
+            return render_template(
+                "profile/change_password.html",
+                must_change=current_user.must_change_password,
+            )
 
         # Update password
         current_user.password = generate_password_hash(new_password)
+
+        # Clear must_change_password flag if it was set
+        if current_user.must_change_password:
+            current_user.must_change_password = False
 
         # Log activity
         activity = ActivityLog(
@@ -198,7 +216,9 @@ def change_password():
         flash("Password changed successfully", "success")
         return redirect(url_for("profile.index"))
 
-    return render_template("profile/change_password.html")
+    return render_template(
+        "profile/change_password.html", must_change=current_user.must_change_password
+    )
 
 
 @profile_bp.route("/admin-tools")

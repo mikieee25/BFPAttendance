@@ -1,11 +1,12 @@
 # Database models for BFP Sorsogon Attendance System
 # Contains all SQLAlchemy models and enums used throughout the application
 
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
+import json
 from datetime import datetime
 from enum import Enum
-import json
+
+from flask_login import UserMixin
+from flask_sqlalchemy import SQLAlchemy
 
 # Global database instance used by all models
 db = SQLAlchemy()
@@ -46,6 +47,9 @@ class User(UserMixin, db.Model):
     # Station assignment and permissions
     station_type = db.Column(db.Enum(StationType), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)  # Admin can access all stations
+    must_change_password = db.Column(
+        db.Boolean, default=False
+    )  # Force password change on next login
 
     # Metadata
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
@@ -181,6 +185,13 @@ class Attendance(db.Model):
     """
 
     __tablename__ = "attendance"
+
+    # Database indexes for optimized queries
+    __table_args__ = (
+        db.Index("idx_attendance_lookup", "personnel_id", "date"),
+        db.Index("idx_attendance_date", "date"),
+        db.Index("idx_attendance_status", "status"),
+    )
 
     # Primary key and personnel reference
     id = db.Column(db.Integer, primary_key=True)

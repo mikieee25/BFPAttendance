@@ -3,27 +3,28 @@
 # Enhanced with optional InsightFace support for improved accuracy and anti-spoofing
 
 # Standard library imports
+import base64
+import json
+import logging
 import os
 import uuid
-import json
-import base64
-import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 # Computer vision and machine learning libraries
 import cv2
-import torch
 import numpy as np
-from ultralytics import YOLO
-from scipy.spatial import distance as dist
+import torch
 
 # Flask framework imports
 from flask import current_app
+from scipy.spatial import distance as dist
 
 # Database imports
 from sqlalchemy import or_
-from models import db, Personnel, FaceData, Attendance, AttendanceStatus, User
+from ultralytics import YOLO
+
+from models import Attendance, AttendanceStatus, FaceData, Personnel, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -697,14 +698,6 @@ def process_attendance(
         # Define cooldown period
         cooldown_seconds = current_app.config.get("ATTENDANCE_COOLDOWN", 60)
         cooldown_period = timedelta(seconds=cooldown_seconds)
-
-        # Use database locking to prevent race conditions
-        # with_for_update() locks the row until transaction completes
-        attendance = (
-            Attendance.query.filter_by(personnel_id=personnel_id, date=today)
-            .with_for_update()
-            .first()
-        )
 
         # Use database locking to prevent race conditions
         # with_for_update() locks the row until transaction completes
@@ -1864,7 +1857,7 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
         for i, base64_image in enumerate(base64_images):
             try:
                 # Process the base64 image (disable liveness for registration)
-                logger.info(f"Processing image {i+1}")
+                logger.info(f"Processing image {i + 1}")
                 face_embedding, face_metadata, temp_path = process_base64_image(
                     base64_image,
                     enable_liveness=False,  # Disable liveness for face registration
@@ -1872,7 +1865,7 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
 
                 # If no face detected or error, skip
                 if face_embedding is None or temp_path is None:
-                    logger.warning(f"No face detected in image {i+1}")
+                    logger.warning(f"No face detected in image {i + 1}")
                     continue
 
                 # Create a filename for the face image
@@ -1907,7 +1900,7 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
 
                 db.session.add(face_data)
                 registered_images.append(filename)
-                logger.info(f"Added face data for image {i+1}")
+                logger.info(f"Added face data for image {i + 1}")
 
             except Exception as e:
                 logger.error(f"Error registering face image {i}: {e}")

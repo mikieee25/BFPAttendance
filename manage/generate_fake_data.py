@@ -2,34 +2,38 @@
 # Generates realistic Filipino personnel records, attendance history, and face data placeholders
 # Uses fil_PH locale for authentic Filipino names and data
 
-import sys
+import logging
 import random
-from datetime import datetime, timedelta, date
+import sys
+from datetime import date, datetime, timedelta
+
+# Management script configuration and utilities
+from config import (
+    ActivityLog,
+    Attendance,
+    FaceData,
+    Personnel,
+    StationType,
+    User,
+    confirm_action,
+    db,
+    get_app_context,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 # External libraries
 from faker import Faker
 from werkzeug.security import generate_password_hash
 
-# Management script configuration and utilities
-from config import (
-    get_app_context,
-    db,
-    User,
-    Personnel,
-    Attendance,
-    FaceData,
-    ActivityLog,
-    StationType,
-    print_success,
-    print_error,
-    print_warning,
-    print_info,
-    print_header,
-    confirm_action,
-)
-
 # Import AttendanceStatus from models
 from models import AttendanceStatus
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Initialize Faker with Philippine locale for authentic Filipino names
 fake = Faker("fil_PH")
@@ -206,7 +210,7 @@ def generate_fake_face_data(personnel_list):
         for i in range(num_faces):
             face_data = FaceData(
                 personnel_id=personnel.id,
-                filename=f"face_{personnel.id}_{i+1}.jpg",
+                filename=f"face_{personnel.id}_{i + 1}.jpg",
                 embedding="[fake_embedding_data]",  # Placeholder for actual face encoding
                 confidence=random.uniform(0.80, 0.95),
                 date_created=fake.date_time_between(
@@ -332,11 +336,11 @@ def generate_all_fake_data(personnel_per_station=5):
             return True
 
     except Exception as e:
-        print_error(f"Error generating fake data: {str(e)}")
+        print_error(f"Error loading fake data: {e}")
         try:
             db.session.rollback()
-        except:
-            pass
+        except Exception as rollback_error:
+            logger.error(f"Error during rollback: {rollback_error}")
         return False
 
 

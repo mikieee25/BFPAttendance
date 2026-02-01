@@ -2,16 +2,29 @@
 # Handles user login, logout, registration, and user management
 
 # Flask framework imports
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
-from flask_login import login_user, logout_user, current_user
+import random
+from datetime import datetime
+
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_user, logout_user
 
 # Security and utilities
 from werkzeug.security import check_password_hash, generate_password_hash
-from datetime import datetime
-import random
 
 # Database models
-from models import db, User, ActivityLog, StationType
+from models import ActivityLog, StationType, User, db
+
+# Import validation utilities
+from utils import validate_email, validate_password, validate_username
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -40,6 +53,11 @@ def login():
 
         if user and check_password_hash(user.password, password):
             login_user(user, remember=remember)
+
+            # Check if user must change password
+            if user.must_change_password:
+                flash("You must change your password before continuing.", "warning")
+                return redirect(url_for("profile.change_password"))
 
             # Set randomized greeting for this login session
             greetings = [
@@ -203,17 +221,20 @@ def manage_stations():
 
     # Get all station users (non-admin users represent stations)
     from models import Personnel
+
     station_users = User.query.filter_by(is_admin=False).all()
 
     # Add personnel count to each station
     for station in station_users:
-        station.personnel_count = Personnel.query.filter_by(station_id=station.id).count()
+        station.personnel_count = Personnel.query.filter_by(
+            station_id=station.id
+        ).count()
 
     # Get station stats
     total_stations = len(station_users)
     active_stations = len([u for u in station_users])  # All stations considered active
     total_personnel = Personnel.query.count()
-    
+
     # Calculate new stations this month
     current_month = datetime.now().replace(day=1)
     new_this_month = len([u for u in station_users if u.date_created >= current_month])
@@ -337,6 +358,7 @@ def get_station(station_id):
 
     # Get personnel count for this station
     from models import Personnel
+
     personnel_count = Personnel.query.filter_by(station_id=station_id).count()
 
     station_data = {
@@ -347,7 +369,9 @@ def get_station(station_id):
         "station_type": station.station_type.value,
         "profile_picture": station.profile_picture,
         "personnel_count": personnel_count,
-        "date_created": station.date_created.strftime('%m/%d/%Y') if station.date_created else None,
+        "date_created": station.date_created.strftime("%m/%d/%Y")
+        if station.date_created
+        else None,
     }
 
     return jsonify({"success": True, "station": station_data})
@@ -365,14 +389,14 @@ def update_station(station_id):
 
     try:
         data = request.get_json()
-        
+
         # Update station details
-        if 'station_name' in data:
-            station.station_name = data['station_name']
-        if 'email' in data:
-            station.email = data['email']
-        if 'station_type' in data:
-            station.station_type = StationType(data['station_type'])
+        if "station_name" in data:
+            station.station_name = data["station_name"]
+        if "email" in data:
+            station.email = data["email"]
+        if "station_type" in data:
+            station.station_type = StationType(data["station_type"])
 
         db.session.commit()
 
@@ -386,7 +410,7 @@ def update_station(station_id):
         db.session.commit()
 
         return jsonify({"success": True, "message": "Station updated successfully"})
-    
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
@@ -416,8 +440,10 @@ def delete_station(station_id):
         db.session.delete(station)
         db.session.commit()
 
-        return jsonify({"success": True, "message": f"Station {station_name} deleted successfully"})
-    
+        return jsonify(
+            {"success": True, "message": f"Station {station_name} deleted successfully"}
+        )
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
@@ -430,18 +456,20 @@ def toggle_user_status(user_id):
         return jsonify({"success": False, "error": "Access denied"}), 403
 
     user = User.query.get_or_404(user_id)
-    
+
     # Prevent admin from deactivating themselves
     if user_id == current_user.id:
-        return jsonify({"success": False, "error": "You cannot change your own status"}), 400
+        return jsonify(
+            {"success": False, "error": "You cannot change your own status"}
+        ), 400
 
     try:
         # Since there's no active status field in the model, we'll simulate it
         # For now, we'll just return a success message without actually changing anything
         # In a real implementation, you'd add an 'is_active' field to the User model
-        
+
         status = "activated" if user.id % 2 == 0 else "deactivated"  # Mock logic
-        
+
         # Log activity
         activity = ActivityLog(
             user_id=current_user.id,
@@ -451,11 +479,10 @@ def toggle_user_status(user_id):
         db.session.add(activity)
         db.session.commit()
 
-        return jsonify({
-            "success": True, 
-            "message": f"User {user.username} has been {status}"
-        })
-    
+        return jsonify(
+            {"success": True, "message": f"User {user.username} has been {status}"}
+        )
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
@@ -471,7 +498,12 @@ def get_user(user_id):
 
     # Get personnel count for this user if it's a station user
     from models import Personnel
-    personnel_count = Personnel.query.filter_by(station_id=user_id).count() if not user.is_admin else 0
+
+    personnel_count = (
+        Personnel.query.filter_by(station_id=user_id).count()
+        if not user.is_admin
+        else 0
+    )
 
     user_data = {
         "id": user.id,
@@ -482,7 +514,9 @@ def get_user(user_id):
         "profile_picture": user.profile_picture,
         "is_admin": user.is_admin,
         "personnel_count": personnel_count,
-        "date_created": user.date_created.strftime('%m/%d/%Y') if user.date_created else None,
+        "date_created": user.date_created.strftime("%m/%d/%Y")
+        if user.date_created
+        else None,
     }
 
     return jsonify({"success": True, "user": user_data})
@@ -510,14 +544,14 @@ def get_user_edit(user_id):
         <div class="mb-3">
             <label for="editStationType" class="form-label">Station Type</label>
             <select class="form-select" id="editStationType" required>
-                <option value="CENTRAL" {'selected' if user.station_type.value == 'CENTRAL' else ''}>Central Station</option>
-                <option value="TALISAY" {'selected' if user.station_type.value == 'TALISAY' else ''}>Talisay Station</option>
-                <option value="BACON" {'selected' if user.station_type.value == 'BACON' else ''}>Bacon Station</option>
-                <option value="ABUYOG" {'selected' if user.station_type.value == 'ABUYOG' else ''}>Abuyog Station</option>
+                <option value="CENTRAL" {"selected" if user.station_type.value == "CENTRAL" else ""}>Central Station</option>
+                <option value="TALISAY" {"selected" if user.station_type.value == "TALISAY" else ""}>Talisay Station</option>
+                <option value="BACON" {"selected" if user.station_type.value == "BACON" else ""}>Bacon Station</option>
+                <option value="ABUYOG" {"selected" if user.station_type.value == "ABUYOG" else ""}>Abuyog Station</option>
             </select>
         </div>
         <div class="mb-3 form-check">
-            <input type="checkbox" class="form-check-input" id="editIsAdmin" {'checked' if user.is_admin else ''}>
+            <input type="checkbox" class="form-check-input" id="editIsAdmin" {"checked" if user.is_admin else ""}>
             <label class="form-check-label" for="editIsAdmin">Administrator</label>
         </div>
     </form>
@@ -534,7 +568,9 @@ def delete_user_new(user_id):
 
     # Prevent self-deletion
     if user_id == current_user.id:
-        return jsonify({"success": False, "error": "You cannot delete your own account"}), 400
+        return jsonify(
+            {"success": False, "error": "You cannot delete your own account"}
+        ), 400
 
     user = User.query.get_or_404(user_id)
     username = user.username
@@ -551,8 +587,10 @@ def delete_user_new(user_id):
         db.session.delete(user)
         db.session.commit()
 
-        return jsonify({"success": True, "message": f"User {username} deleted successfully"})
-    
+        return jsonify(
+            {"success": True, "message": f"User {username} deleted successfully"}
+        )
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500

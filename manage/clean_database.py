@@ -3,23 +3,28 @@
 Clean Database Script
 Removes all entries from the database while keeping the structure intact.
 """
+
+import logging
 import sys
+
 from config import (
-    get_app_context,
-    db,
-    User,
-    Personnel,
+    ActivityLog,
     Attendance,
     FaceData,
-    ActivityLog,
     PendingAttendance,
-    print_success,
-    print_error,
-    print_warning,
-    print_info,
-    print_header,
+    Personnel,
+    User,
     confirm_action,
+    db,
+    get_app_context,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def clean_all_tables():
@@ -92,8 +97,8 @@ def clean_all_tables():
         print_error(f"Error during database cleanup: {str(e)}")
         try:
             db.session.rollback()
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error during rollback: {e}")
         return False
 
 
