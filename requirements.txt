@@ -21,8 +21,8 @@ Pillow
 scipy
 
 # Enhanced Face Detection
-insightface  
-onnxruntime-gpu 
+insightface
+onnxruntime
 
 # Data Processing & Visualization
 matplotlib
@@ -40,7 +40,7 @@ colorama
 email_validator
 
 # Deployment
-waitress  
+waitress
 
 # Development tools (optional)
 pytest
