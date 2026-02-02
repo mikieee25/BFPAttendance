@@ -3,6 +3,11 @@ import logging
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Flask core framework and utilities
 from flask import Flask, redirect, render_template, url_for
 from flask_limiter import Limiter
