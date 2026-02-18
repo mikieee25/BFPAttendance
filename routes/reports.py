@@ -10,7 +10,7 @@ from flask import (
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import pandas as pd
-from io import BytesIO
+from io import BytesIO, StringIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -464,12 +464,10 @@ def export_attendance():
 
     elif format_type == "csv":
         # Create CSV file
-        output = BytesIO()
+        output = StringIO()
         df.to_csv(output, index=False)
-        output.seek(0)
-
         response = make_response(output.getvalue())
-        response.headers["Content-Type"] = "text/csv"
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
         response.headers["Content-Disposition"] = f"attachment; filename={filename}.csv"
         return response
 

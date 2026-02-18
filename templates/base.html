@@ -3,6 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <script>
+      // Apply saved desktop sidebar state before CSS paint to prevent expand->collapse flicker.
+      (function () {
+        try {
+          const isCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
+          const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+          if (isCollapsed && isDesktop) {
+            document.documentElement.classList.add("sidebar-precollapsed");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>{% block title %}BFP Sorsogon Attendance System{% endblock %}</title>
 
     <!-- Favicon -->
@@ -349,6 +362,66 @@
 
     <!-- Custom JavaScript -->
     <script>
+      const csrfToken = document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute("content");
+
+      function ensureFormCsrfToken(form) {
+        if (!csrfToken || !form) return;
+        if (form.querySelector('input[name="csrf_token"]')) return;
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = csrfToken;
+        form.appendChild(input);
+      }
+
+      // Add CSRF token to form submissions.
+      document.addEventListener("DOMContentLoaded", function () {
+        document
+          .querySelectorAll('form[method="POST"], form[method="post"]')
+          .forEach(ensureFormCsrfToken);
+      });
+
+      document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        const method = (form.method || "").toUpperCase();
+        if (method === "POST") {
+          ensureFormCsrfToken(form);
+        }
+      });
+
+      // Add CSRF token to fetch requests.
+      const originalFetch = window.fetch;
+      window.fetch = function (url, options = {}) {
+        if (!csrfToken) return originalFetch(url, options);
+
+        const method = (options.method || "GET").toUpperCase();
+        if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+          return originalFetch(url, options);
+        }
+
+        const headers = new Headers(options.headers || {});
+        if (!headers.has("X-CSRFToken")) {
+          headers.set("X-CSRFToken", csrfToken);
+        }
+
+        return originalFetch(url, { ...options, headers }).then((response) => {
+          if (
+            (response.redirected &&
+              response.url &&
+              response.url.includes("/auth/login")) ||
+            response.status === 401
+          ) {
+            window.location = response.url || "/auth/login";
+            throw new Error("Session expired");
+          }
+          return response;
+        });
+      };
+
       // Sidebar toggle functionality
       document
         .getElementById("sidebarToggle")
@@ -379,8 +452,13 @@
         // Load saved state
         const isCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
         if (isCollapsed && window.innerWidth > 768) {
-          toggleSidebar(true);
+          sidebar.classList.add("collapsed");
+          if (mainContent) mainContent.classList.add("sidebar-collapsed");
+        } else {
+          sidebar.classList.remove("collapsed");
+          if (mainContent) mainContent.classList.remove("sidebar-collapsed");
         }
+        document.documentElement.classList.remove("sidebar-precollapsed");
 
         function toggleSidebar(collapsed = null) {
           if (window.innerWidth <= 768) return; // Don't collapse on mobile
@@ -520,4 +598,3 @@
     {% block extra_js %}{% endblock %}
   </body>
 </html>
-

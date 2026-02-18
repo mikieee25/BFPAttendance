@@ -11,6 +11,7 @@ from flask import (
 from flask_login import login_required, current_user
 from datetime import datetime
 import os
+from sqlalchemy import or_
 
 from models import (
     db,
@@ -20,17 +21,15 @@ from models import (
     ActivityLog,
     AttendanceStatus,
 )
+from utils import admin_required, handle_api_exception
 
 pending_bp = Blueprint("pending", __name__)
 
 
 @pending_bp.route("/")
 @login_required
+@admin_required()
 def index():
-    if not current_user.is_admin:
-        flash("Access denied. Only administrators can view pending approvals.", "error")
-        return redirect(url_for("dashboard.index"))
-
     # Get all pending attendance requests
     pending_requests = (
         PendingAttendance.query.join(Personnel)
@@ -72,10 +71,8 @@ def index():
 
 @pending_bp.route("/approve/<int:request_id>", methods=["POST"])
 @login_required
+@admin_required(api=True)
 def approve(request_id):
-    if not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     try:
         pending_request = PendingAttendance.query.get_or_404(request_id)
 
@@ -151,15 +148,13 @@ def approve(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @pending_bp.route("/reject/<int:request_id>", methods=["POST"])
 @login_required
+@admin_required(api=True)
 def reject(request_id):
-    if not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     try:
         data = request.get_json()
         reason = data.get("reason", "No reason provided")
@@ -190,7 +185,7 @@ def reject(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @pending_bp.route("/submit", methods=["GET", "POST"])
@@ -248,7 +243,7 @@ def submit():
 
         except Exception as e:
             db.session.rollback()
-            return jsonify({"success": False, "error": str(e)}), 500
+            return handle_api_exception(e)
 
     # GET request - show form
     if current_user.is_admin:
@@ -261,14 +256,31 @@ def submit():
 
 @pending_bp.route("/api/data")
 @login_required
+@admin_required(api=True)
 def api_data():
     """DataTables API endpoint for pending requests"""
-    if not current_user.is_admin:
-        return jsonify({"error": "Access denied"}), 403
+    draw = request.args.get("draw", 1, type=int)
+    start = request.args.get("start", 0, type=int)
+    length = request.args.get("length", 25, type=int)
+    search_value = request.args.get("search[value]", "").strip()
+
+    query = PendingAttendance.query.join(Personnel)
+    total_records = query.count()
+    if search_value:
+        query = query.filter(
+            or_(
+                Personnel.first_name.contains(search_value),
+                Personnel.last_name.contains(search_value),
+                Personnel.rank.contains(search_value),
+                PendingAttendance.attendance_type.contains(search_value),
+            )
+        )
+    filtered_records = query.count()
 
     pending_requests = (
-        PendingAttendance.query.join(Personnel)
-        .order_by(PendingAttendance.date_created.desc())
+        query.order_by(PendingAttendance.date_created.desc())
+        .offset(start)
+        .limit(length)
         .all()
     )
 
@@ -295,4 +307,11 @@ def api_data():
             }
         )
 
-    return jsonify({"data": data})
+    return jsonify(
+        {
+            "draw": draw,
+            "recordsTotal": total_records,
+            "recordsFiltered": filtered_records,
+            "data": data,
+        }
+    )

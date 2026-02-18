@@ -74,6 +74,14 @@ Attendance System{% endblock %} {% block content %}
           </div>
 
           <div id="status" class="mt-3"></div>
+          <div
+            id="processingIndicator"
+            class="alert alert-info mt-3"
+            style="display: none"
+          >
+            <i class="fas fa-spinner fa-spin me-2"></i>Processing attendance.
+            Please hold still and keep the tab open.
+          </div>
         </div>
       </div>
     </div>
@@ -167,10 +175,68 @@ Attendance System{% endblock %} {% block content %}
 <script>
   let video, canvas, ctx;
   let stream = null;
+  let cooldownTimer = null;
+  let isCooldownActive = false;
+  const CAPTURE_BUTTON_DEFAULT_HTML =
+    '<i class="fas fa-camera me-2"></i>Capture Attendance';
 
   // Enhanced liveness configuration
   const FRAME_COUNT = 12; // Number of frames to capture for liveness detection
   const FRAME_INTERVAL = 150; // Milliseconds between frames (captures ~2 seconds of video)
+
+  function clearCooldownTimer() {
+    if (cooldownTimer) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+    }
+  }
+
+  function setProcessingState(isProcessing) {
+    const captureBtn = document.getElementById("captureBtn");
+    const retryBtn = document.getElementById("retryBtn");
+    const indicator = document.getElementById("processingIndicator");
+
+    if (isProcessing) {
+      if (indicator) indicator.style.display = "block";
+      if (captureBtn) captureBtn.disabled = true;
+      if (retryBtn) retryBtn.disabled = true;
+    } else {
+      if (indicator) indicator.style.display = "none";
+      if (retryBtn) retryBtn.disabled = false;
+    }
+  }
+
+  function startCooldownCountdown(initialSeconds) {
+    clearCooldownTimer();
+
+    const captureBtn = document.getElementById("captureBtn");
+    let seconds = Number(initialSeconds) || 0;
+    const countdownElement = document.getElementById("cooldownCountdown");
+    if (!countdownElement) return;
+
+    isCooldownActive = true;
+    captureBtn.disabled = true;
+    captureBtn.innerHTML = `<i class="fas fa-hourglass-half me-2"></i>Wait ${seconds}s`;
+    countdownElement.textContent = `${seconds}s`;
+
+    cooldownTimer = setInterval(() => {
+      seconds = Math.max(0, seconds - 1);
+      const el = document.getElementById("cooldownCountdown");
+      if (!el) {
+        clearCooldownTimer();
+        return;
+      }
+
+      el.textContent = `${seconds}s`;
+      captureBtn.innerHTML = `<i class="fas fa-hourglass-half me-2"></i>Wait ${seconds}s`;
+      if (seconds <= 0) {
+        clearCooldownTimer();
+        isCooldownActive = false;
+        captureBtn.disabled = false;
+        captureBtn.innerHTML = CAPTURE_BUTTON_DEFAULT_HTML;
+      }
+    }, 1000);
+  }
 
   // Check browser compatibility
   function checkBrowserCompatibility() {
@@ -336,6 +402,13 @@ Attendance System{% endblock %} {% block content %}
 
   async function processAttendance(frames) {
     try {
+      clearCooldownTimer();
+      setProcessingState(true);
+
+      const controller = new AbortController();
+      const requestTimeoutMs = 90000; // Enhanced liveness + recognition can take time on CPU.
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+
       // Use enhanced endpoint with multiple frames
       const response = await fetch(
         '{{ url_for("api.capture_attendance_enhanced") }}',
@@ -348,10 +421,32 @@ Attendance System{% endblock %} {% block content %}
             frames: frames,
             main_image: frames[frames.length - 1], // Use last frame as main image
           }),
+          signal: controller.signal,
         }
       );
+      clearTimeout(timeoutId);
+
+      // If session expired, Flask may redirect to login page (HTML), not JSON.
+      if (response.redirected && response.url.includes("/auth/login")) {
+        throw new Error(
+          "Session expired. Please log in again, then retry attendance capture."
+        );
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned an unexpected response (HTTP ${response.status}). Please refresh and try again.`
+        );
+      }
 
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || `Attendance request failed (HTTP ${response.status}).`
+        );
+      }
 
       // Hide progress bar
       document.getElementById("livenessProgress").style.display = "none";
@@ -411,7 +506,7 @@ Attendance System{% endblock %} {% block content %}
                     <div class="text-center">
                         <i class="fas fa-info-circle fa-2x text-info mb-3"></i>
                         <h5>${result.personnel.name}</h5>
-                        <p>${result.message}</p>
+                        <p>${result.message || "Attendance already recorded for today."}</p>
                         ${
                           result.time_in
                             ? `<p><strong>Time In:</strong> ${result.time_in}</p>`
@@ -431,9 +526,23 @@ Attendance System{% endblock %} {% block content %}
                         <i class="fas fa-clock fa-2x text-warning mb-3"></i>
                         <h5>${result.personnel.name}</h5>
                         <p>${result.message}</p>
+                        <p><strong>Please wait:</strong> <span id="cooldownCountdown">${
+                          result.remaining_time ?? 0
+                        }s</span></p>
+                        ${
+                          result.time_in
+                            ? `<p><strong>Time In:</strong> ${result.time_in}</p>`
+                            : ""
+                        }
+                        ${
+                          result.time_out
+                            ? `<p><strong>Time Out:</strong> ${result.time_out}</p>`
+                            : ""
+                        }
                     </div>
                 `;
           new bootstrap.Modal(document.getElementById("errorModal")).show();
+          startCooldownCountdown(result.remaining_time);
         }
       } else {
         // Build detailed liveness error message
@@ -521,14 +630,25 @@ Attendance System{% endblock %} {% block content %}
       // Hide progress bar on error
       document.getElementById("livenessProgress").style.display = "none";
 
+      let errorMessage = error.message || "Unknown error";
+      if (error.name === "AbortError") {
+        errorMessage =
+          "Attendance request timed out. Server may be busy. Please try again.";
+      } else if (String(errorMessage).includes("NetworkError")) {
+        errorMessage =
+          "Cannot reach server right now. Check if the app is still running, then retry.";
+      }
+
       console.error("Error processing attendance:", error);
       document.getElementById("errorMessage").innerHTML = `
             <div class="text-center">
                 <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                <p>Error processing attendance: ${error.message}</p>
+                <p>Error processing attendance: ${errorMessage}</p>
             </div>
         `;
       new bootstrap.Modal(document.getElementById("errorModal")).show();
+    } finally {
+      setProcessingState(false);
     }
   }
 
@@ -536,7 +656,6 @@ Attendance System{% endblock %} {% block content %}
     .getElementById("captureBtn")
     .addEventListener("click", async function () {
       const button = this;
-      const originalText = button.innerHTML;
 
       button.disabled = true;
       button.innerHTML =
@@ -561,8 +680,10 @@ Attendance System{% endblock %} {% block content %}
         `;
         new bootstrap.Modal(document.getElementById("errorModal")).show();
       } finally {
-        button.disabled = false;
-        button.innerHTML = originalText;
+        if (!isCooldownActive) {
+          button.disabled = false;
+          button.innerHTML = CAPTURE_BUTTON_DEFAULT_HTML;
+        }
       }
     });
 
@@ -608,6 +729,11 @@ Attendance System{% endblock %} {% block content %}
 
   // Initialize camera when page loads
   document.addEventListener("DOMContentLoaded", function () {
+    const errorModalEl = document.getElementById("errorModal");
+    errorModalEl.addEventListener("hidden.bs.modal", function () {
+      clearCooldownTimer();
+    });
+
     const compatibilityIssues = checkBrowserCompatibility();
 
     if (compatibilityIssues.length > 0) {
@@ -642,4 +768,3 @@ Attendance System{% endblock %} {% block content %}
   });
 </script>
 {% endblock %}
-

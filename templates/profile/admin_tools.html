@@ -126,6 +126,9 @@ System{% endblock %} {% block content %}
           <button class="btn btn-warning" onclick="showResetModal()">
             <i class="fas fa-refresh me-2"></i>Reset Attendance Data
           </button>
+          <button class="btn btn-danger" onclick="performDemoReset()">
+            <i class="fas fa-broom me-2"></i>Demo Reset (Attendance + Logs + Images)
+          </button>
           <a href="{{ url_for('profile.activity_logs') }}" class="btn btn-info">
             <i class="fas fa-history me-2"></i>View Activity Logs
           </a>
@@ -292,6 +295,37 @@ System{% endblock %} {% block content %}
     }
   }
 
+  function performDemoReset() {
+    if (
+      !confirm(
+        "This will delete attendance records, pending attendance, attendance-related logs, and temporary images. Continue?"
+      )
+    ) {
+      return;
+    }
+
+    fetch("/profile/clean-demo", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirm: true }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          showAlert("success", data.message);
+          setTimeout(() => location.reload(), 2000);
+        } else {
+          showAlert("error", data.error || "Demo reset failed");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred during demo reset");
+      });
+  }
+
   // Confirm reset
   function confirmReset() {
     const resetType = $('input[name="resetType"]:checked').val();
@@ -368,4 +402,3 @@ System{% endblock %} {% block content %}
   }
 </script>
 {% endblock %}
-

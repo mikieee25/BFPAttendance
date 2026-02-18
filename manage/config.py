@@ -10,9 +10,17 @@ from pathlib import Path
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from models import (
+from models import (  # noqa: E402
+    ActivityLog,
+    Attendance,
+    AttendanceStatus,
+    FaceData,
+    PendingAttendance,
+    Personnel,
+    StationType,
+    User,
     db,
-)  # noqa: E402
+)
 from flask import Flask  # noqa: E402
 
 

@@ -46,6 +46,9 @@ class User(UserMixin, db.Model):
     # Station assignment and permissions
     station_type = db.Column(db.Enum(StationType), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)  # Admin can access all stations
+    is_active = db.Column(
+        db.Boolean, default=True, nullable=False
+    )  # Inactive users cannot log in
     must_change_password = db.Column(
         db.Boolean, default=False
     )  # Force password change on next login
@@ -96,7 +99,9 @@ class Personnel(db.Model):
     rank = db.Column(db.String(100), nullable=False)  # BFP rank/position
 
     # Station assignment (foreign key to User table)
-    station_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    station_id = db.Column(
+        db.Integer, db.ForeignKey("user.id"), nullable=False, index=True
+    )
 
     # Soft delete - records are never truly deleted
     is_active = db.Column(db.Boolean, default=True)
@@ -190,6 +195,7 @@ class Attendance(db.Model):
         db.Index("idx_attendance_lookup", "personnel_id", "date"),
         db.Index("idx_attendance_date", "date"),
         db.Index("idx_attendance_status", "status"),
+        db.UniqueConstraint("personnel_id", "date", name="uq_attendance_personnel_date"),
     )
 
     # Primary key and personnel reference
@@ -269,7 +275,7 @@ class ActivityLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def __repr__(self):
         return f"<ActivityLog {self.title}>"
@@ -289,7 +295,7 @@ class PendingAttendance(db.Model):
     personnel_id = db.Column(db.Integer, db.ForeignKey("personnel.id"), nullable=False)
 
     # Attendance details
-    date = db.Column(db.Date, nullable=False)
+    date = db.Column(db.Date, nullable=False, index=True)
     attendance_type = db.Column(
         db.Enum("TIME_IN", "TIME_OUT", name="attendance_type_enum"), nullable=False
     )

@@ -4,6 +4,8 @@
 # Flask framework imports
 import random
 from datetime import datetime
+from urllib.parse import urljoin, urlparse
+import logging
 
 from flask import (
     Blueprint,
@@ -15,17 +17,49 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import current_user, login_user, logout_user
+from flask_login import current_user, login_required, login_user, logout_user
 
 # Security and utilities
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Database models
 from models import ActivityLog, StationType, User, db
+from utils import admin_required, handle_api_exception
 
 # Import validation utilities
 
 auth_bp = Blueprint("auth", __name__)
+logger = logging.getLogger(__name__)
+
+
+def _is_safe_redirect_url(target):
+    """Allow redirects only to same host URLs."""
+    if not target:
+        return False
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ("http", "https") and ref_url.netloc == test_url.netloc
+
+
+def _delete_user_account(user_id: int):
+    """Shared deletion logic for HTML and API delete user routes."""
+    # Prevent self-deletion
+    if user_id == current_user.id:
+        return False, "You cannot delete your own account"
+
+    user = User.query.get_or_404(user_id)
+    username = user.username
+
+    activity = ActivityLog(
+        user_id=current_user.id,
+        title="User Deletion",
+        description=f"User {username} deleted by {current_user.username}",
+    )
+    db.session.add(activity)
+    db.session.delete(user)
+    db.session.commit()
+
+    return True, username
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -51,6 +85,10 @@ def login():
             user = User.query.filter_by(email=username_or_email).first()
 
         if user and check_password_hash(user.password, password):
+            if not user.is_active:
+                flash("Your account is inactive. Please contact an administrator.", "error")
+                return render_template("auth/login.html")
+
             login_user(user, remember=remember)
 
             # Check if user must change password
@@ -88,7 +126,7 @@ def login():
             db.session.commit()
 
             next_page = request.args.get("next")
-            if next_page:
+            if next_page and _is_safe_redirect_url(next_page):
                 return redirect(next_page)
             return redirect(url_for("dashboard.index"))
         else:
@@ -120,17 +158,14 @@ def logout():
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
+@login_required
+@admin_required()
 def register():
     """Handle new user registration (admin only).
 
     Only administrators can create new user accounts.
     Validates form data and creates new users with proper station assignments.
     """
-    # Check admin permissions
-    if not current_user.is_authenticated or not current_user.is_admin:
-        flash("Access denied. Only administrators can create new accounts.", "error")
-        return redirect(url_for("auth.login"))
-
     # Station types for dropdown
     station_types_list = [
         {"id": "CENTRAL", "station_name": "Central Station"},
@@ -208,16 +243,13 @@ def register():
 
 
 @auth_bp.route("/manage-stations")
+@login_required
+@admin_required()
 def manage_stations():
     """Display station management page with statistics (admin only).
 
     Shows all stations with filtering options and summary statistics.
     """
-    # Check admin permissions
-    if not current_user.is_authenticated or not current_user.is_admin:
-        flash("Access denied. Only administrators can manage stations.", "error")
-        return redirect(url_for("dashboard.index"))
-
     # Get all station users (non-admin users represent stations)
     from models import Personnel
 
@@ -231,7 +263,7 @@ def manage_stations():
 
     # Get station stats
     total_stations = len(station_users)
-    active_stations = len([u for u in station_users])  # All stations considered active
+    active_stations = len([u for u in station_users if u.is_active])
     total_personnel = Personnel.query.count()
 
     # Calculate new stations this month
@@ -262,16 +294,13 @@ def manage_stations():
 
 
 @auth_bp.route("/manage-users")
+@login_required
+@admin_required()
 def manage_users():
     """Display user management page with statistics (admin only).
 
     Shows all users with filtering options and summary statistics.
     """
-    # Check admin permissions
-    if not current_user.is_authenticated or not current_user.is_admin:
-        flash("Access denied. Only administrators can manage users.", "error")
-        return redirect(url_for("dashboard.index"))
-
     users = User.query.all()
 
     # Get user stats
@@ -280,7 +309,7 @@ def manage_users():
     regular_users = total_users - admin_users
 
     # Calculate active users (all users are considered active for now)
-    active_users = total_users
+    active_users = len([u for u in users if u.is_active])
 
     # Calculate new users this month
     current_month = datetime.now().replace(day=1)
@@ -311,46 +340,33 @@ def manage_users():
 
 
 @auth_bp.route("/delete-user/<int:user_id>", methods=["POST"])
+@login_required
+@admin_required()
 def delete_user(user_id):
     """Delete a user account (admin only).
 
     Prevents users from deleting their own accounts for safety.
     Logs the deletion activity before removing the user.
     """
-    # Check admin permissions
-    if not current_user.is_authenticated or not current_user.is_admin:
-        flash("Access denied. Only administrators can delete users.", "error")
-        return redirect(url_for("dashboard.index"))
-
-    # Prevent self-deletion
-    if user_id == current_user.id:
-        flash("You cannot delete your own account", "error")
+    try:
+        success, result = _delete_user_account(user_id)
+        if not success:
+            flash(result, "error")
+            return redirect(url_for("auth.manage_users"))
+        flash(f"User {result} deleted successfully", "success")
         return redirect(url_for("auth.manage_users"))
-
-    user = User.query.get_or_404(user_id)
-    username = user.username
-
-    # Log activity before deletion
-    activity = ActivityLog(
-        user_id=current_user.id,
-        title="User Deletion",
-        description=f"User {username} deleted by {current_user.username}",
-    )
-    db.session.add(activity)
-
-    db.session.delete(user)
-    db.session.commit()
-
-    flash(f"User {username} deleted successfully", "success")
-    return redirect(url_for("auth.manage_users"))
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Failed to delete user %s", user_id)
+        flash("Unable to delete user right now.", "error")
+        return redirect(url_for("auth.manage_users"))
 
 
 @auth_bp.route("/station/<int:station_id>", methods=["GET"])
+@login_required
+@admin_required(api=True)
 def get_station(station_id):
     """Get station details (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     station = User.query.filter_by(id=station_id, is_admin=False).first()
     if not station:
         return jsonify({"success": False, "error": "Station not found"}), 404
@@ -366,6 +382,7 @@ def get_station(station_id):
         "email": station.email,
         "station_name": station.station_name,
         "station_type": station.station_type.value,
+        "is_active": station.is_active,
         "profile_picture": station.profile_picture,
         "personnel_count": personnel_count,
         "date_created": station.date_created.strftime("%m/%d/%Y")
@@ -377,11 +394,10 @@ def get_station(station_id):
 
 
 @auth_bp.route("/station/<int:station_id>/update", methods=["PUT"])
+@login_required
+@admin_required(api=True)
 def update_station(station_id):
     """Update station details (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     station = User.query.filter_by(id=station_id, is_admin=False).first()
     if not station:
         return jsonify({"success": False, "error": "Station not found"}), 404
@@ -389,9 +405,7 @@ def update_station(station_id):
     try:
         data = request.get_json()
 
-        # Update station details
-        if "station_name" in data:
-            station.station_name = data["station_name"]
+        # station_name is derived from station_type, so it is intentionally ignored.
         if "email" in data:
             station.email = data["email"]
         if "station_type" in data:
@@ -412,15 +426,14 @@ def update_station(station_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @auth_bp.route("/station/<int:station_id>/delete", methods=["DELETE"])
+@login_required
+@admin_required(api=True)
 def delete_station(station_id):
     """Delete station (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     station = User.query.filter_by(id=station_id, is_admin=False).first()
     if not station:
         return jsonify({"success": False, "error": "Station not found"}), 404
@@ -445,15 +458,14 @@ def delete_station(station_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @auth_bp.route("/user/<int:user_id>/toggle-status", methods=["POST"])
+@login_required
+@admin_required(api=True)
 def toggle_user_status(user_id):
     """Toggle user active/inactive status (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     user = User.query.get_or_404(user_id)
 
     # Prevent admin from deactivating themselves
@@ -463,36 +475,45 @@ def toggle_user_status(user_id):
         ), 400
 
     try:
-        # Since there's no active status field in the model, we'll simulate it
-        # For now, we'll just return a success message without actually changing anything
-        # In a real implementation, you'd add an 'is_active' field to the User model
+        # Prevent deactivating the last active admin account
+        if user.is_admin and user.is_active:
+            active_admin_count = User.query.filter_by(is_admin=True, is_active=True).count()
+            if active_admin_count <= 1:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Cannot deactivate the last active administrator account.",
+                        }
+                    ),
+                    400,
+                )
 
-        status = "activated" if user.id % 2 == 0 else "deactivated"  # Mock logic
+        user.is_active = not user.is_active
+        new_status = "activated" if user.is_active else "deactivated"
 
-        # Log activity
         activity = ActivityLog(
             user_id=current_user.id,
-            title="User Status Toggle",
-            description=f"User {user.username} status toggled by {current_user.username}",
+            title="User Status Updated",
+            description=f"User {user.username} was {new_status} by {current_user.username}",
         )
         db.session.add(activity)
         db.session.commit()
 
         return jsonify(
-            {"success": True, "message": f"User {user.username} has been {status}"}
+            {"success": True, "message": f"User {user.username} has been {new_status}"}
         )
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @auth_bp.route("/user/<int:user_id>", methods=["GET"])
+@login_required
+@admin_required(api=True)
 def get_user(user_id):
     """Get user details (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     user = User.query.get_or_404(user_id)
 
     # Get personnel count for this user if it's a station user
@@ -512,6 +533,7 @@ def get_user(user_id):
         "station_type": user.station_type.value,
         "profile_picture": user.profile_picture,
         "is_admin": user.is_admin,
+        "is_active": user.is_active,
         "personnel_count": personnel_count,
         "date_created": user.date_created.strftime("%m/%d/%Y")
         if user.date_created
@@ -522,11 +544,10 @@ def get_user(user_id):
 
 
 @auth_bp.route("/user/<int:user_id>/edit", methods=["GET"])
+@login_required
+@admin_required(api=True)
 def get_user_edit(user_id):
     """Get user edit form (admin only)."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     user = User.query.get_or_404(user_id)
 
     # Return HTML form or user data for editing
@@ -560,36 +581,16 @@ def get_user_edit(user_id):
 
 
 @auth_bp.route("/user/<int:user_id>/delete", methods=["DELETE"])
+@login_required
+@admin_required(api=True)
 def delete_user_new(user_id):
     """Delete user (admin only) - new endpoint to match frontend expectations."""
-    if not current_user.is_authenticated or not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
-    # Prevent self-deletion
-    if user_id == current_user.id:
-        return jsonify(
-            {"success": False, "error": "You cannot delete your own account"}
-        ), 400
-
-    user = User.query.get_or_404(user_id)
-    username = user.username
-
     try:
-        # Log activity before deletion
-        activity = ActivityLog(
-            user_id=current_user.id,
-            title="User Deletion",
-            description=f"User {username} deleted by {current_user.username}",
-        )
-        db.session.add(activity)
-
-        db.session.delete(user)
-        db.session.commit()
-
-        return jsonify(
-            {"success": True, "message": f"User {username} deleted successfully"}
-        )
+        success, result = _delete_user_account(user_id)
+        if not success:
+            return jsonify({"success": False, "error": result}), 400
+        return jsonify({"success": True, "message": f"User {result} deleted successfully"})
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)

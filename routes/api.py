@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_login import login_required, current_user
 from datetime import datetime
 import os
@@ -7,7 +7,9 @@ import numpy as np
 import cv2
 import logging
 
-from models import Personnel, Attendance
+from models import Attendance, AttendanceStatus, Personnel, db
+from sqlalchemy import text
+from utils import handle_api_exception, json_error
 from face_rec_module.face_service import (
     process_base64_image,
     recognize_face,
@@ -17,6 +19,7 @@ from face_rec_module.face_service import (
     get_yolo_model,
     analyze_liveness,
     extract_face_embeddings,
+    to_native_types,
 )
 
 # Set up logger
@@ -60,8 +63,25 @@ def capture_attendance():
         if not image_data:
             return jsonify({"success": False, "error": "No image provided"}), 400
 
-        # Process the image and extract face
-        face_embedding, face_metadata, temp_path = process_base64_image(image_data)
+        # Process the image and extract face (with liveness detection)
+        face_embedding, face_metadata, temp_path = process_base64_image(
+            image_data, enable_liveness=True
+        )
+
+        if face_metadata and face_metadata.get("liveness_failed"):
+            liveness_details = to_native_types(
+                face_metadata.get("liveness_details", {})
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Liveness detection failed. Please use a live camera feed, not a photo or video.",
+                        "liveness_details": liveness_details,
+                    }
+                ),
+                400,
+            )
 
         if face_embedding is None:
             return (
@@ -85,7 +105,10 @@ def capture_attendance():
             )
 
         # Recognize face
-        recognized_id, confidence = recognize_face(face_embedding, face_database)
+        threshold = current_app.config.get("FACE_RECOGNITION_THRESHOLD", 0.6)
+        recognized_id, confidence = recognize_face(
+            face_embedding, face_database, threshold
+        )
 
         if recognized_id is None:
             return (
@@ -105,10 +128,12 @@ def capture_attendance():
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
+        if isinstance(result, dict) and result.get("success"):
+            result["enhanced_liveness"] = False
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @api_bp.route("/attendance/capture/enhanced", methods=["POST"])
@@ -137,7 +162,7 @@ def capture_attendance_enhanced():
         main_image_data = data.get("main_image") or (frames_data[-1] if frames_data else None)
         
         if not main_image_data:
-            return jsonify({"success": False, "error": "No image provided"}), 400
+            return json_error("No image provided", 400)
         
         if len(frames_data) < 3:
             # Fall back to standard single-image processing if not enough frames
@@ -205,6 +230,7 @@ def capture_attendance_enhanced():
         
         if not is_live:
             logger.warning("❌ ENHANCED LIVENESS DETECTION FAILED - Possible spoofing attempt detected!")
+            liveness_details = to_native_types(liveness_details)
             logger.warning(f"Liveness details: {liveness_details}")
             return jsonify({
                 "success": False,
@@ -270,10 +296,12 @@ def capture_attendance_enhanced():
         
         # Process attendance
         result = process_attendance(recognized_id, confidence, main_image_data)
+        if isinstance(result, dict) and result.get("success"):
+            result["enhanced_liveness"] = True
         
         # Add liveness details to result
         if result.get("success"):
-            result["liveness_details"] = liveness_details
+            result["liveness_details"] = to_native_types(liveness_details)
             result["enhanced_liveness"] = True
         
         # Clean up temp file
@@ -284,7 +312,7 @@ def capture_attendance_enhanced():
         
     except Exception as e:
         logger.error(f"Error in enhanced attendance capture: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @api_bp.route("/face/register/<int:personnel_id>", methods=["POST"])
@@ -309,7 +337,45 @@ def register_personnel_face(personnel_id):
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
+
+
+@api_bp.route("/health")
+def health_check():
+    """Basic health check for DB connectivity and model readiness."""
+    status = {
+        "ok": True,
+        "database": "ok",
+        "models": {},
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+    # Database check
+    try:
+        db.session.execute(text("SELECT 1"))
+    except Exception as exc:
+        status["ok"] = False
+        status["database"] = f"error: {exc}"
+
+    # Model checks
+    try:
+        get_yolo_model()
+        status["models"]["yolo"] = "ok"
+    except Exception as exc:
+        status["ok"] = False
+        status["models"]["yolo"] = f"error: {exc}"
+
+    try:
+        if current_app.config.get("USE_INSIGHTFACE", False):
+            app = get_insightface_app()
+            status["models"]["insightface"] = "ok" if app else "disabled"
+        else:
+            status["models"]["insightface"] = "disabled"
+    except Exception as exc:
+        status["ok"] = False
+        status["models"]["insightface"] = f"error: {exc}"
+
+    return jsonify(status), (200 if status["ok"] else 503)
 
 
 @api_bp.route("/stats/dashboard")
@@ -331,10 +397,16 @@ def dashboard_stats():
     total_personnel = personnel_query.count()
     today_attendance = attendance_query.filter(Attendance.date == today).all()
     present_today = len(
-        [a for a in today_attendance if a.status in ["PRESENT", "LATE"]]
+        [
+            a
+            for a in today_attendance
+            if a.status in [AttendanceStatus.PRESENT, AttendanceStatus.LATE]
+        ]
     )
     absent_today = total_personnel - present_today
-    late_today = len([a for a in today_attendance if a.status == "LATE"])
+    late_today = len(
+        [a for a in today_attendance if a.status == AttendanceStatus.LATE]
+    )
 
     return jsonify(
         {
@@ -398,14 +470,3 @@ def get_personnel_attendance(personnel_id):
 
     return jsonify({"attendance": data})
 
-
-@api_bp.route("/health")
-def health_check():
-    """Health check endpoint"""
-    return jsonify(
-        {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "version": "1.0.0",
-        }
-    )

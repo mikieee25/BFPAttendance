@@ -24,9 +24,12 @@ This directory contains development and management scripts for the BFP Attendanc
 ### 🗄️ Database Management
 
 - **`migrate_database.py`** - Database schema creation, migration, and initialization
+- **`migrate_user_status_and_attendance_constraint.py`** - Adds `user.is_active` and attendance uniqueness constraint
+- **`migrate_add_indexes.py`** - Adds performance indexes for common queries
 - **`backup_database.py`** - Database backup and restore operations
 - **`clean_database.py`** - Clean all database data (⚠️ **DESTRUCTIVE**)
 - **`clean_personnel.py`** - Clean personnel data only (preserves admin users)
+- **`clean_attendance.py`** - Clean attendance records only (preserves personnel and face data)
 
 ### 🎭 Data Generation
 
@@ -105,6 +108,10 @@ python migrate_database.py
 # 5. Create station users
 ```
 
+```bash
+python migrate_user_status_and_attendance_constraint.py
+```
+
 ### Fake Data Generation
 
 ```bash
@@ -150,6 +157,8 @@ manage/
 ├── config.py              # Base configuration
 ├── manage.py              # Main console
 ├── migrate_database.py    # Schema management
+├── migrate_user_status_and_attendance_constraint.py  # User status + attendance constraint migration
+├── migrate_add_indexes.py # Performance indexes
 ├── backup_database.py     # Backup/restore
 ├── clean_database.py      # Data cleaning
 ├── clean_personnel.py     # Personnel cleaning

@@ -106,6 +106,12 @@ local.properties
 *.sqlite
 *.sqlite3
 *.db
+manage/backups/*.sql
+
+# Runtime-generated face capture artifacts
+static/images/attendance_temp/*.jpg
+static/images/attendance_temp/*.jpeg
+static/images/attendance_temp/*.png
 
 # Miscellaneous
 *.orig

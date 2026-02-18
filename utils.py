@@ -5,10 +5,58 @@ Contains security helpers, validation functions, and common utilities
 
 import logging
 import re
+from functools import wraps
 from typing import Tuple
+
+from flask import current_app, flash, jsonify, redirect, request, url_for
+from flask_login import current_user
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def admin_required(api: bool = False, login_endpoint: str = "auth.login"):
+    """Decorator to enforce admin-only access for routes."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                if api:
+                    return jsonify({"success": False, "error": "Authentication required"}), 401
+                return redirect(url_for(login_endpoint))
+
+            if not current_user.is_admin:
+                if api:
+                    return jsonify({"success": False, "error": "Access denied"}), 403
+                flash("Access denied. Only administrators can access this page.", "error")
+                return redirect(url_for("dashboard.index"))
+
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def is_ajax_or_json_request() -> bool:
+    """Return True if the request expects JSON style responses."""
+    return (
+        request.is_json
+        or request.accept_mimetypes.accept_json
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+
+def json_error(message: str, status_code: int = 500):
+    """Create a consistent JSON error response."""
+    return jsonify({"success": False, "error": message}), status_code
+
+
+def handle_api_exception(error: Exception, public_message: str = "An unexpected error occurred."):
+    """Log internal exception details while returning a safe public message."""
+    current_app.logger.exception("API error: %s", error)
+    return json_error(public_message, 500)
 
 
 def validate_password(password: str) -> Tuple[bool, str]:
