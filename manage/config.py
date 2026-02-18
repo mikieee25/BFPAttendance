@@ -12,15 +12,8 @@ sys.path.insert(0, str(parent_dir))
 
 from models import (
     db,
-    User,
-    Personnel,
-    Attendance,
-    FaceData,
-    ActivityLog,
-    PendingAttendance,
-    StationType,
-)
-from flask import Flask
+)  # noqa: E402
+from flask import Flask  # noqa: E402
 
 
 def create_app():
@@ -81,9 +74,9 @@ def print_info(message):
 
 def print_header(message):
     """Print header message"""
-    print(f"\n{Colors.HEADER}{Colors.BOLD}{'='*60}{Colors.ENDC}")
+    print(f"\n{Colors.HEADER}{Colors.BOLD}{'=' * 60}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{message.center(60)}{Colors.ENDC}")
-    print(f"{Colors.HEADER}{Colors.BOLD}{'='*60}{Colors.ENDC}\n")
+    print(f"{Colors.HEADER}{Colors.BOLD}{'=' * 60}{Colors.ENDC}\n")
 
 
 def confirm_action(message):

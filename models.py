@@ -1,11 +1,11 @@
 # Database models for BFP Sorsogon Attendance System
 # Contains all SQLAlchemy models and enums used throughout the application
 
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
 from datetime import datetime
 from enum import Enum
-import json
+
+from flask_login import UserMixin
+from flask_sqlalchemy import SQLAlchemy
 
 # Global database instance used by all models
 db = SQLAlchemy()
@@ -46,6 +46,9 @@ class User(UserMixin, db.Model):
     # Station assignment and permissions
     station_type = db.Column(db.Enum(StationType), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)  # Admin can access all stations
+    must_change_password = db.Column(
+        db.Boolean, default=False
+    )  # Force password change on next login
 
     # Metadata
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
@@ -95,6 +98,20 @@ class Personnel(db.Model):
     # Station assignment (foreign key to User table)
     station_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
+    # Soft delete - records are never truly deleted
+    is_active = db.Column(db.Boolean, default=True)
+
+    # Shift schedule fields
+    shift_start_time = db.Column(db.Time, nullable=True)  # e.g., 08:00
+    shift_end_time = db.Column(db.Time, nullable=True)  # e.g., 17:00
+    is_shifting = db.Column(db.Boolean, default=False)  # True if on rotation shift
+    shift_start_date = db.Column(
+        db.Date, nullable=True
+    )  # Date when shift cycle started
+    shift_duration_days = db.Column(
+        db.Integer, default=15
+    )  # Number of days per shift cycle (e.g., 15 days on, 15 days off)
+
     # Metadata
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     image_path = db.Column(db.String(255))  # Profile photo path
@@ -121,6 +138,40 @@ class Personnel(db.Model):
     def name_with_rank(self):
         return f"{self.rank} {self.first_name} {self.last_name}"
 
+    def is_on_duty(self, check_date=None):
+        """Check if personnel is on duty on a given date.
+
+        For shifting personnel (X days on, X days off):
+        - Calculate which day of the cycle the check_date falls on
+        - Uses shift_duration_days to determine cycle length
+        - First half of cycle is ON duty, second half is OFF duty
+
+        Returns True if on duty, False if off duty
+        """
+        if check_date is None:
+            check_date = datetime.now().date()
+
+        # Non-shifting personnel are always on duty
+        if not self.is_shifting:
+            return True
+
+        # If no shift start date set, assume always on duty
+        if not self.shift_start_date:
+            return True
+
+        # Get shift duration (default to 15 if not set)
+        duration = self.shift_duration_days or 15
+
+        # Calculate days since shift cycle started
+        days_since_start = (check_date - self.shift_start_date).days
+
+        # Each full cycle is 2x duration (e.g., 15 on + 15 off = 30 days)
+        full_cycle_length = duration * 2
+        day_in_cycle = days_since_start % full_cycle_length
+
+        # First 'duration' days are ON duty
+        return day_in_cycle < duration
+
     def __repr__(self):
         return f"<Personnel {self.full_name}>"
 
@@ -133,6 +184,13 @@ class Attendance(db.Model):
     """
 
     __tablename__ = "attendance"
+
+    # Database indexes for optimized queries
+    __table_args__ = (
+        db.Index("idx_attendance_lookup", "personnel_id", "date"),
+        db.Index("idx_attendance_date", "date"),
+        db.Index("idx_attendance_status", "status"),
+    )
 
     # Primary key and personnel reference
     id = db.Column(db.Integer, primary_key=True)

@@ -26,6 +26,7 @@ target/
 .env.development
 .env.test
 .env.production
+.venv
 
 # IDEs and editors
 .idea/
@@ -116,3 +117,5 @@ local.properties
 .stylelintcache
 .cache/
 .parcel-cache/
+.python-version
+__pycache__

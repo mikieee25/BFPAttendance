@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, jsonify, current_app
+from flask import Blueprint, render_template, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
-from sqlalchemy import func, desc
-from models import db, Personnel, Attendance, User, AttendanceStatus, StationType
+from datetime import datetime
+from sqlalchemy import desc
+from models import Personnel, Attendance, AttendanceStatus
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -45,43 +45,6 @@ def index():
         attendance_query.order_by(desc(Attendance.date_created)).limit(10).all()
     )
 
-    # Weekly attendance summary
-    week_start = today - timedelta(days=today.weekday())
-    weekly_data = []
-    for i in range(7):
-        date = week_start + timedelta(days=i)
-        count = attendance_query.filter(
-            Attendance.date == date,
-            Attendance.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.LATE]),
-        ).count()
-        weekly_data.append({"date": date.strftime("%A"), "count": count})
-
-    # Monthly attendance trends
-    current_month = datetime.now().replace(day=1)
-    monthly_data = []
-    for i in range(12):
-        month = current_month - timedelta(days=30 * i)
-        month_start = month.replace(day=1)
-        if month == current_month:
-            month_end = datetime.now().date()
-        else:
-            if month.month == 12:
-                month_end = month.replace(
-                    year=month.year + 1, month=1, day=1
-                ) - timedelta(days=1)
-            else:
-                month_end = month.replace(month=month.month + 1, day=1) - timedelta(
-                    days=1
-                )
-
-        count = attendance_query.filter(
-            Attendance.date >= month_start.date(),
-            Attendance.date <= month_end,
-            Attendance.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.LATE]),
-        ).count()
-
-        monthly_data.insert(0, {"month": month.strftime("%b %Y"), "count": count})
-
     # Get current time for the clock
     current_time = datetime.now()
 
@@ -91,8 +54,6 @@ def index():
         "absent_today": absent_today,
         "late_today": late_today,
         "recent_attendance": recent_attendance,
-        "weekly_data": weekly_data,
-        "monthly_data": monthly_data,
         "current_time": current_time,
         "today": today,
     }

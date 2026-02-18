@@ -149,6 +149,128 @@
             </div>
           </div>
 
+          <!-- Shift Schedule Section -->
+          <div class="row">
+            <div class="col-12">
+              <hr class="my-4">
+              <h6 class="text-primary mb-3">
+                <i class="fas fa-clock me-2"></i>Shift Schedule
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_start_time" class="form-label">
+                  Shift Start Time
+                </label>
+                <input
+                  type="time"
+                  class="form-control"
+                  id="shift_start_time"
+                  name="shift_start_time"
+                  value="{{ personnel.shift_start_time.strftime('%H:%M') if personnel.shift_start_time else '08:00' }}"
+                />
+                <small class="form-text text-muted">Default work start time</small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_end_time" class="form-label">
+                  Shift End Time
+                </label>
+                <input
+                  type="time"
+                  class="form-control"
+                  id="shift_end_time"
+                  name="shift_end_time"
+                  value="{{ personnel.shift_end_time.strftime('%H:%M') if personnel.shift_end_time else '17:00' }}"
+                />
+                <small class="form-text text-muted">Default work end time</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="is_shifting"
+                    name="is_shifting"
+                    onchange="toggleShiftingOptions()"
+                    {{ 'checked' if personnel.is_shifting else '' }}
+                  />
+                  <label class="form-check-label" for="is_shifting">
+                    <strong>Rotation Shift</strong>
+                  </label>
+                </div>
+                <small class="form-text text-muted">
+                  Enable for rotation schedule (X days on / X days off)
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" id="shift_date_row" style="{{ 'display: flex;' if personnel.is_shifting else 'display: none;' }}">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_start_date" class="form-label">
+                  Shift Cycle Start Date
+                </label>
+                <input
+                  type="date"
+                  class="form-control"
+                  id="shift_start_date"
+                  name="shift_start_date"
+                  value="{{ personnel.shift_start_date.strftime('%Y-%m-%d') if personnel.shift_start_date else '' }}"
+                />
+                <small class="form-text text-muted">
+                  When does their current shift cycle begin?
+                </small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_duration_days" class="form-label">
+                  Shift Duration (Days)
+                </label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="shift_duration_days"
+                  name="shift_duration_days"
+                  min="1"
+                  max="60"
+                  value="{{ personnel.shift_duration_days or 15 }}"
+                />
+                <small class="form-text text-muted">
+                  Number of days ON duty (same for OFF duty)
+                </small>
+              </div>
+            </div>
+          </div>
+
+          {% if personnel.is_shifting %}
+          <div class="row">
+            <div class="col-12">
+              <div class="alert {{ 'alert-success' if personnel.is_on_duty() else 'alert-warning' }}" role="alert">
+                <i class="fas fa-info-circle me-2"></i>
+                {% if personnel.is_on_duty() %}
+                <strong>Currently ON DUTY</strong> - Personnel is in their active {{ personnel.shift_duration_days or 15 }}-day shift period.
+                {% else %}
+                <strong>Currently OFF DUTY</strong> - Personnel is in their {{ personnel.shift_duration_days or 15 }}-day off period.
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <hr class="my-4">
+
           <div class="row">
             <div class="col-12">
               <div class="alert alert-info" role="alert">
@@ -174,24 +296,24 @@
       </div>
     </div>
 
-    <!-- Danger Zone -->
-    <div class="card mt-4 border-danger">
-      <div class="card-header bg-danger text-white">
+    <!-- Archive Zone (instead of Delete) -->
+    <div class="card mt-4 border-warning">
+      <div class="card-header bg-warning text-dark">
         <h6 class="m-0 font-weight-bold">
-          <i class="fas fa-exclamation-triangle me-2"></i>Danger Zone
+          <i class="fas fa-archive me-2"></i>Archive Personnel
         </h6>
       </div>
       <div class="card-body">
         <div class="row align-items-center">
           <div class="col-md-8">
-            <h6 class="text-danger">Delete Personnel</h6>
+            <h6 class="text-warning">Archive Personnel Record</h6>
             <p class="text-muted mb-0">
-              Permanently delete this personnel record. This action cannot be undone and will remove all associated attendance records.
+              Archive this personnel record. Their attendance history will be preserved and they can be restored later if needed.
             </p>
           </div>
           <div class="col-md-4 text-end">
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
-              <i class="fas fa-trash me-2"></i>Delete Personnel
+            <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#archiveModal">
+              <i class="fas fa-archive me-2"></i>Archive Personnel
             </button>
           </div>
         </div>
@@ -200,27 +322,27 @@
   </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<!-- Archive Confirmation Modal -->
+<div class="modal fade" id="archiveModal" tabindex="-1" aria-labelledby="archiveModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="deleteModalLabel">
-          <i class="fas fa-exclamation-triangle text-danger me-2"></i>Confirm Deletion
+        <h5 class="modal-title" id="archiveModalLabel">
+          <i class="fas fa-archive text-warning me-2"></i>Confirm Archive
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p>Are you sure you want to delete <strong>{{ personnel.full_name }}</strong>?</p>
-        <div class="alert alert-danger" role="alert">
-          <i class="fas fa-warning me-2"></i>
-          <strong>This action cannot be undone!</strong> All attendance records for this personnel will also be permanently deleted.
+        <p>Are you sure you want to archive <strong>{{ personnel.full_name }}</strong>?</p>
+        <div class="alert alert-info" role="alert">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>Note:</strong> All attendance records will be preserved. This personnel can be restored later if needed.
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
-          <i class="fas fa-trash me-2"></i>Delete Personnel
+        <button type="button" class="btn btn-warning" id="confirmArchiveBtn">
+          <i class="fas fa-archive me-2"></i>Archive Personnel
         </button>
       </div>
     </div>
@@ -273,17 +395,17 @@ document.getElementById('editPersonnelForm').addEventListener('submit', async fu
     }
 });
 
-// Handle delete confirmation
-document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
-    const deleteBtn = this;
-    const originalText = deleteBtn.innerHTML;
+// Handle archive confirmation
+document.getElementById('confirmArchiveBtn').addEventListener('click', async function() {
+    const archiveBtn = this;
+    const originalText = archiveBtn.innerHTML;
     
     // Show loading state
-    deleteBtn.disabled = true;
-    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+    archiveBtn.disabled = true;
+    archiveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Archiving...';
     
     try {
-        const response = await fetch("{{ url_for('personnel.delete', personnel_id=personnel.id) }}", {
+        const response = await fetch("{{ url_for('personnel.archive', personnel_id=personnel.id) }}", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -293,17 +415,29 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async func
         if (response.ok) {
             window.location.href = "{{ url_for('personnel.index') }}";
         } else {
-            alert('An error occurred while deleting personnel.');
+            alert('An error occurred while archiving personnel.');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred while deleting personnel.');
+        alert('An error occurred while archiving personnel.');
     } finally {
         // Restore button state
-        deleteBtn.disabled = false;
-        deleteBtn.innerHTML = originalText;
+        archiveBtn.disabled = false;
+        archiveBtn.innerHTML = originalText;
     }
 });
+
+// Toggle shifting options visibility
+function toggleShiftingOptions() {
+    const isShifting = document.getElementById('is_shifting').checked;
+    const dateRow = document.getElementById('shift_date_row');
+    
+    if (isShifting) {
+        dateRow.style.display = 'flex';
+    } else {
+        dateRow.style.display = 'none';
+    }
+}
 </script>
 
 {% endblock %}

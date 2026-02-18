@@ -6,16 +6,13 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 
 # Date/time utilities and database queries
-from datetime import datetime, date, timedelta
-from sqlalchemy import func, desc, and_, or_
+from datetime import datetime
+from sqlalchemy import desc, or_
 import os
 import logging
 
 # Database models
-from models import db, Personnel, Attendance, User, AttendanceStatus, ActivityLog
-
-# Set up logger
-logger = logging.getLogger(__name__)
+from models import db, Personnel, Attendance, AttendanceStatus, ActivityLog
 
 # Face recognition service functions
 from face_rec_module.face_service import (
@@ -24,6 +21,9 @@ from face_rec_module.face_service import (
     load_face_database,
     process_attendance,
 )
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 attendance_bp = Blueprint("attendance", __name__)
 
@@ -144,7 +144,7 @@ def api_capture():
         if face_metadata and face_metadata.get("liveness_failed"):
             liveness_details = face_metadata.get("liveness_details", {})
             logger.warning(
-                f"❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
+                "❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
             )
             logger.warning(f"Liveness details: {liveness_details}")
             return (

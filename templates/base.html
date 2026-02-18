@@ -98,7 +98,7 @@
           <ul class="nav flex-column">
             <li class="nav-item">
               <a
-                class="nav-link {{ 'active' if request.endpoint and 'dashboard' in request.endpoint else '' }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}"
                 href="{{ url_for('dashboard.index') }}"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -110,7 +110,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {{ 'active' if request.endpoint and 'personnel' in request.endpoint else '' }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('personnel.') else '' }}"
                 href="{{ url_for('personnel.index') }}"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -122,7 +122,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {{ 'active' if request.endpoint and 'attendance' in request.endpoint else '' }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('attendance.') else '' }}"
                 href="{{ url_for('attendance.index') }}"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -134,7 +134,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {{ 'active' if request.endpoint and 'reports' in request.endpoint else '' }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('reports.') else '' }}"
                 href="{{ url_for('reports.index') }}"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -147,7 +147,7 @@
             {% if current_user.is_admin %}
             <li class="nav-item">
               <a
-                class="nav-link {{ 'active' if request.endpoint and 'pending' in request.endpoint else '' }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('pending.') else '' }}"
                 href="{{ url_for('pending.index') }}"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"

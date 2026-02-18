@@ -4,7 +4,6 @@ Database Backup Script
 Creates SQL dumps of the database for backup purposes.
 """
 import os
-import sys
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -115,7 +114,7 @@ def backup_database():
         # Execute mysqldump
         with open(backup_path, "w", encoding="utf-8") as backup_file:
             try:
-                result = subprocess.run(
+                subprocess.run(
                     cmd,
                     stdout=backup_file,
                     stderr=subprocess.PIPE,
@@ -126,7 +125,7 @@ def backup_database():
                 # Check if backup file was created and has content
                 if backup_path.exists() and backup_path.stat().st_size > 0:
                     file_size = backup_path.stat().st_size / (1024 * 1024)  # MB
-                    print_success(f"Backup created successfully!")
+                    print_success("Backup created successfully!")
                     print_info(f"File: {backup_path}")
                     print_info(f"Size: {file_size:.2f} MB")
                     return True
@@ -248,7 +247,7 @@ def restore_database(backup_file=None):
         # Execute mysql restore
         with open(backup_file, "r", encoding="utf-8") as backup_file_handle:
             try:
-                result = subprocess.run(
+                subprocess.run(
                     cmd,
                     stdin=backup_file_handle,
                     stderr=subprocess.PIPE,

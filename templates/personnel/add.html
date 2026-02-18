@@ -104,6 +104,115 @@ Attendance System{% endblock %} {% block content %}
             </div>
           </div>
 
+          <!-- Shift Schedule Section -->
+          <div class="row">
+            <div class="col-12">
+              <hr class="my-4" />
+              <h6 class="text-primary mb-3">
+                <i class="fas fa-clock me-2"></i>Shift Schedule
+              </h6>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_start_time" class="form-label">
+                  Shift Start Time
+                </label>
+                <input
+                  type="time"
+                  class="form-control"
+                  id="shift_start_time"
+                  name="shift_start_time"
+                  value="08:00"
+                />
+                <small class="form-text text-muted"
+                  >Default work start time</small
+                >
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_end_time" class="form-label">
+                  Shift End Time
+                </label>
+                <input
+                  type="time"
+                  class="form-control"
+                  id="shift_end_time"
+                  name="shift_end_time"
+                  value="17:00"
+                />
+                <small class="form-text text-muted"
+                  >Default work end time</small
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="is_shifting"
+                    name="is_shifting"
+                    onchange="toggleShiftingOptions()"
+                  />
+                  <label class="form-check-label" for="is_shifting">
+                    <strong>Rotation Shift</strong>
+                  </label>
+                </div>
+                <small class="form-text text-muted">
+                  Enable for rotation schedule (X days on / X days off)
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" id="shift_date_row" style="display: none">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_start_date" class="form-label">
+                  Shift Cycle Start Date
+                </label>
+                <input
+                  type="date"
+                  class="form-control"
+                  id="shift_start_date"
+                  name="shift_start_date"
+                />
+                <small class="form-text text-muted">
+                  When does their current shift cycle begin?
+                </small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="shift_duration_days" class="form-label">
+                  Shift Duration (Days)
+                </label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="shift_duration_days"
+                  name="shift_duration_days"
+                  min="1"
+                  max="60"
+                  value="15"
+                />
+                <small class="form-text text-muted">
+                  Number of days ON duty (same for OFF duty)
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4" />
+
           <div class="row">
             <div class="col-12">
               <div class="mb-3">
@@ -221,6 +330,8 @@ Attendance System{% endblock %} {% block content %}
 
           // Reset form
           this.reset();
+          // Reset shifting options visibility
+          toggleShiftingOptions();
         } else {
           alert("Error: " + result.error);
         }
@@ -233,6 +344,18 @@ Attendance System{% endblock %} {% block content %}
         submitBtn.innerHTML = originalText;
       }
     });
+
+  // Toggle shifting options visibility
+  function toggleShiftingOptions() {
+    const isShifting = document.getElementById("is_shifting").checked;
+    const dateRow = document.getElementById("shift_date_row");
+
+    if (isShifting) {
+      dateRow.style.display = "flex";
+    } else {
+      dateRow.style.display = "none";
+    }
+  }
 </script>
 
 {% endblock %}

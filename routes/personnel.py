@@ -10,21 +10,17 @@ from flask import (
     redirect,
     url_for,
     flash,
-    current_app,
 )
 from flask_login import login_required, current_user
 
 # File handling and utilities
-from werkzeug.utils import secure_filename
-import os
-import json
 from datetime import datetime
 
 # Database models
-from models import db, Personnel, User, FaceData, ActivityLog, StationType
+from models import db, Personnel, User, FaceData, ActivityLog
 
 # Face recognition service
-from face_rec_module.face_service import register_face, clear_face_database_cache
+from face_rec_module.face_service import register_face
 
 personnel_bp = Blueprint("personnel", __name__)
 
@@ -36,18 +32,31 @@ def index():
 
     Admins can see all personnel across stations.
     Station users see only personnel from their assigned station.
+    Only shows active personnel by default.
     """
+    # Get show_inactive parameter
+    show_inactive = request.args.get("show_inactive", "false") == "true"
+
     # Get personnel based on user role and station access
     if current_user.is_admin:
-        personnel = Personnel.query.all()  # Admin sees all personnel
+        query = Personnel.query
     else:
-        personnel = Personnel.query.filter_by(station_id=current_user.id).all()
+        query = Personnel.query.filter_by(station_id=current_user.id)
+
+    # Filter by active status unless show_inactive is True
+    if not show_inactive:
+        query = query.filter_by(is_active=True)
+
+    personnel = query.all()
 
     # Get all stations for the dropdown (admin only)
     stations = User.query.all() if current_user.is_admin else [current_user]
 
     return render_template(
-        "personnel/index.html", personnel=personnel, stations=stations
+        "personnel/index.html",
+        personnel=personnel,
+        stations=stations,
+        show_inactive=show_inactive,
     )
 
 
@@ -127,12 +136,55 @@ def add():
                 flash("You can only add personnel to your own station", "error")
                 return redirect(url_for("personnel.index"))
 
+            # Get shift-related fields
+            shift_start_time = request.form.get("shift_start_time", "").strip()
+            shift_end_time = request.form.get("shift_end_time", "").strip()
+            is_shifting = request.form.get("is_shifting") == "on"
+            shift_start_date = request.form.get("shift_start_date", "").strip()
+            shift_duration_days = request.form.get("shift_duration_days", "").strip()
+
+            # Parse time values
+            parsed_shift_start = None
+            parsed_shift_end = None
+            parsed_shift_date = None
+            parsed_duration = 15  # Default to 15 days
+
+            if shift_start_time:
+                from datetime import time
+
+                hours, minutes = map(int, shift_start_time.split(":"))
+                parsed_shift_start = time(hours, minutes)
+
+            if shift_end_time:
+                from datetime import time
+
+                hours, minutes = map(int, shift_end_time.split(":"))
+                parsed_shift_end = time(hours, minutes)
+
+            if shift_start_date and is_shifting:
+                parsed_shift_date = datetime.strptime(
+                    shift_start_date, "%Y-%m-%d"
+                ).date()
+
+            if shift_duration_days and is_shifting:
+                try:
+                    parsed_duration = int(shift_duration_days)
+                    # Ensure reasonable bounds
+                    parsed_duration = max(1, min(60, parsed_duration))
+                except ValueError:
+                    parsed_duration = 15
+
             # Create new personnel
             new_personnel = Personnel(
                 first_name=first_name,
                 last_name=last_name,
                 rank=rank,
                 station_id=station_id,
+                shift_start_time=parsed_shift_start,
+                shift_end_time=parsed_shift_end,
+                is_shifting=is_shifting,
+                shift_start_date=parsed_shift_date,
+                shift_duration_days=parsed_duration if is_shifting else None,
             )
 
             db.session.add(new_personnel)
@@ -202,6 +254,49 @@ def edit(personnel_id):
         if current_user.is_admin:
             personnel.station_id = int(request.form["station_id"])
 
+        # Update shift-related fields
+        shift_start_time = request.form.get("shift_start_time", "").strip()
+        shift_end_time = request.form.get("shift_end_time", "").strip()
+        is_shifting = request.form.get("is_shifting") == "on"
+        shift_start_date = request.form.get("shift_start_date", "").strip()
+        shift_duration_days = request.form.get("shift_duration_days", "").strip()
+
+        # Parse time values
+        if shift_start_time:
+            from datetime import time
+
+            hours, minutes = map(int, shift_start_time.split(":"))
+            personnel.shift_start_time = time(hours, minutes)
+        else:
+            personnel.shift_start_time = None
+
+        if shift_end_time:
+            from datetime import time
+
+            hours, minutes = map(int, shift_end_time.split(":"))
+            personnel.shift_end_time = time(hours, minutes)
+        else:
+            personnel.shift_end_time = None
+
+        personnel.is_shifting = is_shifting
+
+        if shift_start_date and is_shifting:
+            personnel.shift_start_date = datetime.strptime(
+                shift_start_date, "%Y-%m-%d"
+            ).date()
+        elif not is_shifting:
+            personnel.shift_start_date = None
+
+        # Handle shift duration
+        if shift_duration_days and is_shifting:
+            try:
+                duration = int(shift_duration_days)
+                personnel.shift_duration_days = max(1, min(60, duration))
+            except ValueError:
+                personnel.shift_duration_days = 15
+        elif not is_shifting:
+            personnel.shift_duration_days = None
+
         # Log activity
         activity = ActivityLog(
             user_id=current_user.id,
@@ -225,59 +320,82 @@ def edit(personnel_id):
     )
 
 
-@personnel_bp.route("/delete/<int:personnel_id>", methods=["POST"])
+@personnel_bp.route("/archive/<int:personnel_id>", methods=["POST"])
 @login_required
-def delete(personnel_id):
+def archive(personnel_id):
+    """Archive a personnel record (soft delete).
+
+    Personnel records are never truly deleted to maintain attendance history.
+    Instead, they are marked as inactive.
+    """
     personnel = Personnel.query.get_or_404(personnel_id)
 
     # Check access
     if not current_user.is_admin and personnel.station_id != current_user.id:
-        flash("You can only delete personnel from your own station", "error")
+        flash("You can only archive personnel from your own station", "error")
         return redirect(url_for("personnel.index"))
 
     try:
         name = personnel.full_name
         station_name = personnel.station.station_name
 
-        # Delete related face data first
-        FaceData.query.filter_by(personnel_id=personnel_id).delete()
+        # Mark as inactive instead of deleting
+        personnel.is_active = False
 
-        # Delete face image files if they exist
-        folder_name = f"{personnel.last_name}_{personnel.first_name}".replace(" ", "")
-        folder_path = os.path.join(
-            current_app.config.get("UPLOAD_FOLDER", "static/images/face_data"),
-            folder_name,
-        )
-
-        if os.path.exists(folder_path):
-            import shutil
-
-            try:
-                shutil.rmtree(folder_path)
-            except Exception as e:
-                print(f"Warning: Could not delete folder {folder_path}: {e}")
-
-        # Log activity before deletion
+        # Log activity
         activity = ActivityLog(
             user_id=current_user.id,
-            title="Personnel Deleted",
-            description=f"Personnel {name} deleted from {station_name}",
+            title="Personnel Archived",
+            description=f"Personnel {name} archived from {station_name}",
         )
         db.session.add(activity)
-
-        # Delete the personnel record
-        db.session.delete(personnel)
         db.session.commit()
 
-        # Clear face database cache since we deleted face data
-        clear_face_database_cache()
-
-        flash(f"Personnel {name} deleted successfully", "success")
+        flash(
+            f"Personnel {name} archived successfully. Their records are preserved.",
+            "success",
+        )
         return redirect(url_for("personnel.index"))
 
     except Exception as e:
         db.session.rollback()
-        flash(f"Error deleting personnel: {str(e)}", "error")
+        flash(f"Error archiving personnel: {str(e)}", "error")
+        return redirect(url_for("personnel.index"))
+
+
+@personnel_bp.route("/restore/<int:personnel_id>", methods=["POST"])
+@login_required
+def restore(personnel_id):
+    """Restore an archived personnel record."""
+    personnel = Personnel.query.get_or_404(personnel_id)
+
+    # Check access
+    if not current_user.is_admin and personnel.station_id != current_user.id:
+        flash("You can only restore personnel from your own station", "error")
+        return redirect(url_for("personnel.index"))
+
+    try:
+        name = personnel.full_name
+        station_name = personnel.station.station_name
+
+        # Mark as active
+        personnel.is_active = True
+
+        # Log activity
+        activity = ActivityLog(
+            user_id=current_user.id,
+            title="Personnel Restored",
+            description=f"Personnel {name} restored to {station_name}",
+        )
+        db.session.add(activity)
+        db.session.commit()
+
+        flash(f"Personnel {name} restored successfully.", "success")
+        return redirect(url_for("personnel.index"))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error restoring personnel: {str(e)}", "error")
         return redirect(url_for("personnel.index"))
 
 
@@ -339,8 +457,7 @@ def api_register_face(personnel_id):
         # Check if request contains FormData with image file
         elif "image" in request.files:
             import base64
-            from io import BytesIO
-
+            
             # Get the uploaded file
             image_file = request.files["image"]
 
@@ -382,28 +499,48 @@ def api_register_face(personnel_id):
 @login_required
 def api_data():
     """DataTables API endpoint"""
+    # Get show_inactive parameter
+    show_inactive = request.args.get("show_inactive", "false") == "true"
+
     # Get personnel based on user role
     if current_user.is_admin:
-        personnel = Personnel.query.all()
+        query = Personnel.query
     else:
-        personnel = Personnel.query.filter_by(station_id=current_user.id).all()
+        query = Personnel.query.filter_by(station_id=current_user.id)
+
+    # Filter by active status unless show_inactive is True
+    if not show_inactive:
+        query = query.filter_by(is_active=True)
+
+    personnel = query.all()
 
     data = []
     for p in personnel:
         face_count = FaceData.query.filter_by(personnel_id=p.id).count()
-        data.append(
-            {
-                "id": p.id,
-                "full_name": p.full_name,
-                "rank": p.rank,
-                "station": p.station.station_name,
-                "face_count": face_count,
-                "date_created": (
-                    p.date_created.strftime("%Y-%m-%d %H:%M:%S")
-                    if p.date_created
-                    else ""
-                ),
-                "actions": f"""
+
+        # Build status badge
+        status_badge = (
+            '<span class="badge bg-success">Active</span>'
+            if p.is_active
+            else '<span class="badge bg-secondary">Archived</span>'
+        )
+
+        # Build shift info
+        shift_info = ""
+        if p.is_shifting:
+            on_duty = p.is_on_duty()
+            shift_info = '<span class="badge bg-info">Shifting</span> '
+            shift_info += (
+                '<span class="badge bg-success">On Duty</span>'
+                if on_duty
+                else '<span class="badge bg-warning">Off Duty</span>'
+            )
+        elif p.shift_start_time and p.shift_end_time:
+            shift_info = f'{p.shift_start_time.strftime("%H:%M")} - {p.shift_end_time.strftime("%H:%M")}'
+
+        # Build action buttons based on active status
+        if p.is_active:
+            action_buttons = f"""
                 <a href="{url_for('personnel.view', personnel_id=p.id)}" class="btn btn-sm btn-info">
                     <i class="fas fa-eye"></i> View
                 </a>
@@ -413,12 +550,39 @@ def api_data():
                 <a href="{url_for('personnel.register_face_page', personnel_id=p.id)}" class="btn btn-sm btn-camera">
                     <i class="fas fa-camera"></i> Face
                 </a>
-                <form method="POST" action="{url_for('personnel.delete', personnel_id=p.id)}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this personnel?')">
-                    <button type="submit" class="btn btn-sm btn-danger btn-delete-custom">
-                        <i class="fas fa-trash"></i> Delete
+                <form method="POST" action="{url_for('personnel.archive', personnel_id=p.id)}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to archive this personnel? Their records will be preserved.')">
+                    <button type="submit" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-archive"></i> Archive
                     </button>
                 </form>
-            """,
+            """
+        else:
+            action_buttons = f"""
+                <a href="{url_for('personnel.view', personnel_id=p.id)}" class="btn btn-sm btn-info">
+                    <i class="fas fa-eye"></i> View
+                </a>
+                <form method="POST" action="{url_for('personnel.restore', personnel_id=p.id)}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to restore this personnel?')">
+                    <button type="submit" class="btn btn-sm btn-success">
+                        <i class="fas fa-undo"></i> Restore
+                    </button>
+                </form>
+            """
+
+        data.append(
+            {
+                "id": p.id,
+                "full_name": p.full_name,
+                "rank": p.rank,
+                "station": p.station.station_name,
+                "status": status_badge,
+                "shift_info": shift_info,
+                "face_count": face_count,
+                "date_created": (
+                    p.date_created.strftime("%Y-%m-%d %H:%M:%S")
+                    if p.date_created
+                    else ""
+                ),
+                "actions": action_buttons,
             }
         )
 

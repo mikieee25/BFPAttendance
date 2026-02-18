@@ -19,7 +19,10 @@ opencv-python
 numpy
 Pillow
 scipy
-face-recognition  # Deep learning face recognition with dlib
+
+# Enhanced Face Detection
+insightface
+onnxruntime
 
 # Data Processing & Visualization
 matplotlib
@@ -37,10 +40,9 @@ colorama
 email_validator
 
 # Deployment
-waitress  
+waitress
 
 # Development tools (optional)
 pytest
 black
 flake8
-faker
