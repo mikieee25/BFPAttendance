@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 import logging
 
-from models import db, Personnel, Attendance, User
+from models import Personnel, Attendance
 from face_rec_module.face_service import (
     process_base64_image,
     recognize_face,

@@ -1,12 +1,9 @@
 # Core Python libraries
 import logging
 import os
-from datetime import datetime
+import sys
 
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Flask core framework and utilities
 from flask import Flask, redirect, render_template, url_for
@@ -16,10 +13,12 @@ from flask_login import LoginManager, current_user
 from werkzeug.security import generate_password_hash
 
 # Face recognition service (imported but not used in app.py - available for blueprints)
-from face_rec_module.face_service import cleanup_old_attendance_images
+from face_rec_module.face_service import cleanup_old_attendance_images  # noqa: F401
 
 # Database models and enums
 from models import AttendanceStatus, StationType, User, db
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +27,16 @@ logging.basicConfig(
     handlers=[logging.FileHandler("bfp_attendance.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+# Warn if interpreter differs from the project's .python-version (3.11.14)
+if (sys.version_info.major, sys.version_info.minor) != (3, 11):
+    logger.warning(
+        "Project '.python-version' = 3.11.14 — current interpreter is %d.%d.%d. "
+        "Some dependencies are tested on Python 3.11; consider using 3.11 if you encounter issues.",
+        sys.version_info.major,
+        sys.version_info.minor,
+        sys.version_info.micro,
+    )
 
 
 def create_app():
@@ -47,7 +56,7 @@ def create_app():
         else:
             raise RuntimeError(
                 "SECRET_KEY environment variable must be set in production. "
-                "Generate a secure key with: python -c 'import secrets; print(secrets.token_hex(32))'"
+                "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\""
             )
     app.config["SECRET_KEY"] = secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(

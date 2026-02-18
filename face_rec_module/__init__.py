@@ -1,6 +1,7 @@
 """
 Face recognition service module initialization.
 """
+# flake8: noqa
 
 from .face_service import (
     get_yolo_model,
@@ -12,4 +13,4 @@ from .face_service import (
     save_attendance_image,
     process_base64_image,
     register_face,
-)
+)  # noqa: F401

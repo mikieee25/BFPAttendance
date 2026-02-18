@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, jsonify, current_app
+from flask import Blueprint, render_template, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
-from sqlalchemy import func, desc
-from models import db, Personnel, Attendance, User, AttendanceStatus, StationType
+from datetime import datetime
+from sqlalchemy import desc
+from models import Personnel, Attendance, AttendanceStatus
 
 dashboard_bp = Blueprint("dashboard", __name__)
 

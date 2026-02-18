@@ -3,7 +3,6 @@
 Database Migration Script
 Handles database schema creation, updates, and migrations.
 """
-import sys
 from config import (
     get_app_context,
     db,
@@ -14,7 +13,6 @@ from config import (
     ActivityLog,
     PendingAttendance,
     StationType,
-    AttendanceStatus,
     print_success,
     print_error,
     print_warning,

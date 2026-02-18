@@ -1,7 +1,6 @@
 # Database models for BFP Sorsogon Attendance System
 # Contains all SQLAlchemy models and enums used throughout the application
 
-import json
 from datetime import datetime
 from enum import Enum
 

@@ -5,7 +5,6 @@ Removes all personnel and related data while keeping admin users intact.
 """
 
 import logging
-import sys
 
 from config import (
     ActivityLog,

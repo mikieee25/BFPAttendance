@@ -24,7 +24,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from models import ActivityLog, StationType, User, db
 
 # Import validation utilities
-from utils import validate_email, validate_password, validate_username
 
 auth_bp = Blueprint("auth", __name__)
 

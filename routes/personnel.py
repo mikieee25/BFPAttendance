@@ -10,21 +10,17 @@ from flask import (
     redirect,
     url_for,
     flash,
-    current_app,
 )
 from flask_login import login_required, current_user
 
 # File handling and utilities
-from werkzeug.utils import secure_filename
-import os
-import json
 from datetime import datetime
 
 # Database models
-from models import db, Personnel, User, FaceData, ActivityLog, StationType
+from models import db, Personnel, User, FaceData, ActivityLog
 
 # Face recognition service
-from face_rec_module.face_service import register_face, clear_face_database_cache
+from face_rec_module.face_service import register_face
 
 personnel_bp = Blueprint("personnel", __name__)
 
@@ -461,8 +457,7 @@ def api_register_face(personnel_id):
         # Check if request contains FormData with image file
         elif "image" in request.files:
             import base64
-            from io import BytesIO
-
+            
             # Get the uploaded file
             image_file = request.files["image"]
 

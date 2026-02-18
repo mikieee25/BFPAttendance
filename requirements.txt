@@ -46,4 +46,3 @@ waitress
 pytest
 black
 flake8
-faker

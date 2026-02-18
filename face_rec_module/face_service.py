@@ -21,10 +21,9 @@ from flask import current_app
 from scipy.spatial import distance as dist
 
 # Database imports
-from sqlalchemy import or_
 from ultralytics import YOLO
 
-from models import Attendance, AttendanceStatus, FaceData, Personnel, User, db
+from models import Attendance, AttendanceStatus, FaceData, Personnel, db
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +315,7 @@ def extract_face_embeddings(
             logger.warning(f"  - Image shape: {img.shape}")
             logger.warning(f"  - Confidence threshold: {confidence_threshold}")
             logger.warning(
-                f"  - Try better lighting, face closer to camera, or lower threshold"
+                "  - Try better lighting, face closer to camera, or lower threshold"
             )
             return None, None
 
@@ -1932,7 +1931,7 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
             f"Committing changes to database, {len(registered_images)} images registered"
         )
         db.session.commit()
-        logger.info(f"Database commit successful")
+        logger.info("Database commit successful")
 
         # Clear face database cache since we added new face data
         clear_face_database_cache()

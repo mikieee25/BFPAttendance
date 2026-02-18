@@ -15,9 +15,9 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text
-from app import create_app
-from models import db
+from sqlalchemy import text  # noqa: E402
+from app import create_app  # noqa: E402
+from models import db  # noqa: E402
 
 # Create the Flask app
 app = create_app()

@@ -273,22 +273,22 @@ def api_data():
     )
 
     data = []
-    for request in pending_requests:
+    for pending in pending_requests:
         data.append(
             {
-                "id": request.id,
-                "personnel": request.personnel.name_with_rank,
-                "station": request.personnel.station.station_name,
-                "date": request.date.strftime("%Y-%m-%d"),
-                "type": request.attendance_type.replace("_", " ").title(),
-                "notes": request.notes or "",
-                "submitted": request.date_created.strftime("%Y-%m-%d %H:%M:%S"),
-                "image": f'<img src="/static/{request.image_path}" alt="Attendance Image" style="max-width: 100px; max-height: 100px; cursor: pointer;" onclick="showImageModal(this.src)">',
+                "id": pending.id,
+                "personnel": pending.personnel.name_with_rank,
+                "station": pending.personnel.station.station_name,
+                "date": pending.date.strftime("%Y-%m-%d"),
+                "type": pending.attendance_type.replace("_", " ").title(),
+                "notes": pending.notes or "",
+                "submitted": pending.date_created.strftime("%Y-%m-%d %H:%M:%S"),
+                "image": f'<img src="/static/{pending.image_path}" alt="Attendance Image" style="max-width: 100px; max-height: 100px; cursor: pointer;" onclick="showImageModal(this.src)">',
                 "actions": f"""
-                <button class="btn btn-sm btn-success" onclick="approveRequest({request.id})">
+                <button class="btn btn-sm btn-success" onclick="approveRequest({pending.id})">
                     <i class="fas fa-check"></i> Approve
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="rejectRequest({request.id})">
+                <button class="btn btn-sm btn-danger" onclick="rejectRequest({pending.id})">
                     <i class="fas fa-times"></i> Reject
                 </button>
             """,

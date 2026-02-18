@@ -2,7 +2,6 @@ from flask import (
     Blueprint,
     render_template,
     request,
-    jsonify,
     redirect,
     url_for,
     make_response,
@@ -10,7 +9,6 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
-from sqlalchemy import func, desc, and_
 import pandas as pd
 from io import BytesIO
 from reportlab.lib import colors
@@ -19,7 +17,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 
-from models import db, Personnel, Attendance, User, AttendanceStatus, StationType
+from models import Personnel, Attendance, User, AttendanceStatus
 
 reports_bp = Blueprint("reports", __name__)
 

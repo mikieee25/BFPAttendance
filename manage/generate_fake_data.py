@@ -4,7 +4,6 @@
 
 import logging
 import random
-import sys
 from datetime import date, datetime, timedelta
 
 # Management script configuration and utilities

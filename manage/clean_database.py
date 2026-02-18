@@ -5,7 +5,6 @@ Removes all entries from the database while keeping the structure intact.
 """
 
 import logging
-import sys
 
 from config import (
     ActivityLog,
