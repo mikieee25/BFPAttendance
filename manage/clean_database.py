@@ -5,6 +5,7 @@ Removes all entries from the database while keeping the structure intact.
 """
 
 import logging
+from sqlalchemy import text
 
 from config import (
     ActivityLog,
@@ -118,7 +119,7 @@ def reset_auto_increment():
 
             for table in tables:
                 try:
-                    db.session.execute(f"ALTER TABLE {table} AUTO_INCREMENT = 1")
+                    db.session.execute(text(f"ALTER TABLE {table} AUTO_INCREMENT = 1"))
                     print_success(f"Reset auto-increment for {table}")
                 except Exception as e:
                     print_warning(

@@ -1,5 +1,9 @@
 import os
+import subprocess
+import shutil
 from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import (
     Blueprint,
@@ -15,10 +19,99 @@ from flask_login import current_user, login_required
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from models import ActivityLog, Attendance, Personnel, StationType, User, db
-from utils import validate_password
+from models import ActivityLog, Attendance, PendingAttendance, Personnel, StationType, User, db
+from sqlalchemy import or_
+from utils import admin_required, handle_api_exception, json_error, validate_password
 
 profile_bp = Blueprint("profile", __name__)
+
+
+def _database_config_from_url(db_url: str):
+    parsed = urlparse(db_url.replace("mysql+pymysql://", "mysql://", 1))
+    if not parsed.scheme.startswith("mysql"):
+        return None
+    return {
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 3306,
+        "user": parsed.username or "root",
+        "password": parsed.password or "",
+        "database": (parsed.path or "").lstrip("/"),
+    }
+
+
+def _cleanup_attendance_images() -> int:
+    """Delete temporary attendance images used for face capture demos."""
+    temp_root = Path(current_app.static_folder) / "images" / "attendance_temp"
+    legacy_root = (
+        Path(current_app.static_folder) / "images" / "attendance_images_temp"
+    )
+
+    deleted_items = 0
+    for root in [temp_root, legacy_root]:
+        if not root.exists():
+            continue
+        for item in root.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    item.unlink(missing_ok=True)
+                deleted_items += 1
+            except Exception as exc:
+                current_app.logger.warning("Failed deleting %s: %s", item, exc)
+
+    return deleted_items
+
+
+def _run_database_backup():
+    db_url = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    db_config = _database_config_from_url(db_url)
+    if not db_config or not db_config.get("database"):
+        raise RuntimeError("Unsupported DATABASE_URL format for backup.")
+
+    backup_dir = Path(current_app.root_path) / "manage" / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"bfp_attendance_backup_{timestamp}.sql"
+    backup_path = backup_dir / backup_filename
+
+    cmd = [
+        "mysqldump",
+        f"--host={db_config['host']}",
+        f"--port={db_config['port']}",
+        f"--user={db_config['user']}",
+    ]
+    if db_config["password"]:
+        cmd.append(f"--password={db_config['password']}")
+    cmd.extend(
+        [
+            "--single-transaction",
+            "--routines",
+            "--triggers",
+            "--add-drop-table",
+            "--complete-insert",
+            db_config["database"],
+        ]
+    )
+
+    with backup_path.open("w", encoding="utf-8") as backup_file:
+        result = subprocess.run(
+            cmd,
+            stdout=backup_file,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+    if result.returncode != 0:
+        if backup_path.exists():
+            backup_path.unlink()
+        raise RuntimeError(result.stderr.strip() or "mysqldump failed")
+    if not backup_path.exists() or backup_path.stat().st_size == 0:
+        raise RuntimeError("Backup file was not generated.")
+
+    return backup_filename
 
 
 @profile_bp.route("/")
@@ -223,11 +316,8 @@ def change_password():
 
 @profile_bp.route("/admin-tools")
 @login_required
+@admin_required()
 def admin_tools():
-    if not current_user.is_admin:
-        flash("Access denied. Only administrators can access admin tools.", "error")
-        return redirect(url_for("profile.index"))
-
     # Get system statistics
     total_users = User.query.count()
     total_personnel = Personnel.query.count()
@@ -249,10 +339,8 @@ def admin_tools():
 
 @profile_bp.route("/reset-attendance", methods=["POST"])
 @login_required
+@admin_required(api=True)
 def reset_attendance():
-    if not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
     try:
         data = request.get_json()
         reset_type = data.get("type")
@@ -273,7 +361,7 @@ def reset_attendance():
                 f"Attendance records from {start_date} to {end_date} have been reset"
             )
         else:
-            return jsonify({"success": False, "error": "Invalid reset parameters"}), 400
+            return json_error("Invalid reset parameters", 400)
 
         # Log activity
         activity = ActivityLog(
@@ -286,34 +374,82 @@ def reset_attendance():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
-@profile_bp.route("/system-backup", methods=["POST"])
+@profile_bp.route("/clean-demo", methods=["POST"])
 @login_required
-def system_backup():
-    if not current_user.is_admin:
-        return jsonify({"success": False, "error": "Access denied"}), 403
-
+@admin_required(api=True)
+def clean_demo():
+    """Clean attendance + pending + related logs/images for demo resets."""
     try:
-        # This is a placeholder for backup functionality
-        # In a real application, you would implement database backup here
+        deleted_attendance = Attendance.query.delete()
+        deleted_pending = PendingAttendance.query.delete()
+        deleted_logs = ActivityLog.query.filter(
+            or_(
+                ActivityLog.title.ilike("%attendance%"),
+                ActivityLog.description.ilike("%attendance%"),
+            )
+        ).delete(synchronize_session=False)
+        db.session.commit()
 
-        # Log activity
+        deleted_images = _cleanup_attendance_images()
+
         activity = ActivityLog(
             user_id=current_user.id,
-            title="System Backup",
-            description="System backup initiated",
+            title="Demo Cleanup",
+            description=(
+                "Demo reset completed. "
+                f"Attendance: {deleted_attendance}, Pending: {deleted_pending}, "
+                f"Logs: {deleted_logs}, Images: {deleted_images}"
+            ),
         )
         db.session.add(activity)
         db.session.commit()
 
         return jsonify(
-            {"success": True, "message": "System backup completed successfully"}
+            {
+                "success": True,
+                "message": "Demo data cleaned successfully.",
+                "deleted": {
+                    "attendance": deleted_attendance,
+                    "pending": deleted_pending,
+                    "logs": deleted_logs,
+                    "images": deleted_images,
+                },
+            }
+        )
+    except Exception as e:
+        db.session.rollback()
+        return handle_api_exception(e, "Demo cleanup failed. Check server logs.")
+
+
+@profile_bp.route("/system-backup", methods=["POST"])
+@login_required
+@admin_required(api=True)
+def system_backup():
+    try:
+        backup_filename = _run_database_backup()
+
+        # Log activity
+        activity = ActivityLog(
+            user_id=current_user.id,
+            title="System Backup",
+            description=f"System backup created: {backup_filename}",
+        )
+        db.session.add(activity)
+        db.session.commit()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "System backup completed successfully",
+                "backup_file": backup_filename,
+            }
         )
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e, "System backup failed. Check server logs.")
 
 
 @profile_bp.route("/activity-logs")

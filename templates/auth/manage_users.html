@@ -120,8 +120,8 @@ Attendance System{% endblock %} {% block content %}
             <select class="form-select" id="filterStation">
               <option value="">All Stations</option>
               {% for station in stations %}
-              <option value="{{ station.id }}">
-                {{ station.station_name }}
+              <option value="{{ station.name }}">
+                {{ station.name }}
               </option>
               {% endfor %}
             </select>
@@ -132,10 +132,8 @@ Attendance System{% endblock %} {% block content %}
             >
             <select class="form-select" id="filterStatus">
               <option value="">All Status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="ON_LEAVE">On Leave</option>
-              <option value="SUSPENDED">Suspended</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
             </select>
           </div>
           <div class="col-md-4">
@@ -203,7 +201,9 @@ Attendance System{% endblock %} {% block content %}
                 <td>{{ user.station_type.value }}</td>
                 <td>{{ user.email }}</td>
                 <td>
-                  <span class="badge bg-success">Active</span>
+                  <span class="badge bg-{{ 'success' if user.is_active else 'secondary' }}">
+                    {{ 'Active' if user.is_active else 'Inactive' }}
+                  </span>
                 </td>
                 <td>
                   <span
@@ -225,6 +225,15 @@ Attendance System{% endblock %} {% block content %}
                     >
                       <i class="fas fa-edit"></i>
                     </button>
+                    {% if user.id != current_user.id %}
+                    <button
+                      class="btn btn-sm btn-outline-{{ 'warning' if user.is_active else 'primary' }}"
+                      onclick="toggleUserStatus({{ user.id }})"
+                      title="{{ 'Deactivate User' if user.is_active else 'Activate User' }}"
+                    >
+                      <i class="fas fa-{{ 'user-slash' if user.is_active else 'user-check' }}"></i>
+                    </button>
+                    {% endif %}
                     {% if not user.is_admin or user.id != current_user.id %}
                     <button
                       class="btn btn-sm btn-outline-danger btn-delete-custom"
@@ -488,4 +497,3 @@ Attendance System{% endblock %} {% block content %}
   }
 </script>
 {% endblock %}
-

@@ -119,7 +119,17 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
    - Copy `.env.example` to `.env`
    - Update configuration values as needed
 
-6. **Run the application**
+6. **Run migration for existing databases**
+
+   ```bash
+   python manage/migrate_user_status_and_attendance_constraint.py
+   ```
+
+   This adds:
+   - `user.is_active`
+   - unique constraint on `attendance(personnel_id, date)`
+
+7. **Run the application**
 
    ```bash
    python app.py
@@ -131,24 +141,14 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
    run.bat
    ```
 
-7. **Access the application**
+8. **Access the application**
    - Open your browser and go to `http://localhost:5000`
-   - Default admin credentials:
-     - Username: `admin`
-     - Password: `admin1234`
-   - Default station credentials:
-   - CENTRAL
-     - Username: `central`
-     - Password: `central1234`
-   - Talisay Sub-station
-     - Username: `talisay`
-     - Password: `talisay1234`
-   - Abuyog Sub-station
-     - Username: `abuyog`
-     - Password: `abuyog1234`
-   - Bacon Sub-station
-     - Username: `bacon`
-     - Password: `bacon1234`
+   - The app no longer creates default credentials automatically.
+   - To bootstrap an admin account for a fresh database, set:
+     - `AUTO_CREATE_ADMIN=true`
+     - `DEFAULT_ADMIN_USERNAME=admin` (optional, default is `admin`)
+     - `DEFAULT_ADMIN_EMAIL=admin@bfp.gov.ph` (optional)
+     - `DEFAULT_ADMIN_PASSWORD=<strong_password>` (required when bootstrap is enabled)
 
 ## Configuration
 
@@ -156,6 +156,12 @@ A comprehensive web-based attendance management system for the Bureau of Fire Pr
 
 - `SECRET_KEY`: Flask secret key for session security
 - `DATABASE_URL`: MySQL connection string
+- `AUTO_CREATE_ADMIN`: Set to `true` to create an initial admin account on startup
+- `DEFAULT_ADMIN_USERNAME`: Initial admin username (used only when `AUTO_CREATE_ADMIN=true`)
+- `DEFAULT_ADMIN_EMAIL`: Initial admin email (used only when `AUTO_CREATE_ADMIN=true`)
+- `DEFAULT_ADMIN_PASSWORD`: Initial admin password (required when `AUTO_CREATE_ADMIN=true`)
+- `DEFAULT_STATION_PASSWORD`: Default station user password when auto-created
+- `PRELOAD_FACE_MODELS`: Set `true` to preload face models at startup (reduces first capture delay)
 - `FACE_DETECTION_CONFIDENCE`: Minimum confidence for face detection (0.5)
 - `FACE_RECOGNITION_THRESHOLD`: Face recognition similarity threshold (0.75)
 - `WORK_START_TIME`: Official work start time (08:00)
@@ -172,7 +178,8 @@ BFPAttendance/
 ├── models.py              # Database models
 ├── requirements.txt       # Python dependencies
 ├── run.bat               # Windows startup script
-├── .env                  # Environment configuration
+├── .env                  # Local environment configuration
+├── .env.example          # Environment template
 ├── face_recognition/     # Face recognition module
 │   ├── __init__.py
 │   ├── face_service.py   # Face recognition logic
@@ -211,6 +218,7 @@ BFPAttendance/
 3. **Approval Process**: Review and approve manual attendance submissions
 4. **System Reports**: Generate comprehensive attendance reports
 5. **System Maintenance**: Use admin tools for system management
+   - Demo reset tool can clear attendance/pending/logs/images for repeatable demos
 
 ### For Station Users
 
@@ -223,6 +231,10 @@ BFPAttendance/
 
 1. **Face Recognition**: Use the attendance capture system for automatic check-in/out
 2. **Manual Submission**: Submit attendance photos for approval when needed
+
+## Health Check
+
+- `GET /api/health` returns a JSON summary of database connectivity and face model readiness.
 
 ## Security Features
 
@@ -257,4 +269,3 @@ This project is developed for the Bureau of Fire Protection Sorsogon Province.
 **Bureau of Fire Protection**  
 **Sorsogon Province**  
 **Attendance Management System v1.0**
-

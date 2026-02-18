@@ -2,7 +2,16 @@
 # Handles attendance viewing, face recognition capture, manual entry, and CRUD operations
 
 # Flask framework imports
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import login_required, current_user
 
 # Date/time utilities and database queries
@@ -13,6 +22,7 @@ import logging
 
 # Database models
 from models import db, Personnel, Attendance, AttendanceStatus, ActivityLog
+from utils import handle_api_exception
 
 # Face recognition service functions
 from face_rec_module.face_service import (
@@ -20,6 +30,7 @@ from face_rec_module.face_service import (
     recognize_face,
     load_face_database,
     process_attendance,
+    to_native_types,
 )
 
 # Set up logger
@@ -142,7 +153,9 @@ def api_capture():
 
         # Check if liveness detection failed
         if face_metadata and face_metadata.get("liveness_failed"):
-            liveness_details = face_metadata.get("liveness_details", {})
+            liveness_details = to_native_types(
+                face_metadata.get("liveness_details", {})
+            )
             logger.warning(
                 "❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
             )
@@ -180,18 +193,18 @@ def api_capture():
             )
 
         # Recognize face
-        from app import app
-
-        threshold = app.config.get("FACE_RECOGNITION_THRESHOLD", 0.6)
-        app.logger.info(f"Attempting face recognition with threshold: {threshold}")
-        app.logger.info(f"Database has {len(face_database)} registered personnel")
+        threshold = current_app.config.get("FACE_RECOGNITION_THRESHOLD", 0.6)
+        current_app.logger.info(
+            f"Attempting face recognition with threshold: {threshold}"
+        )
+        current_app.logger.info(f"Database has {len(face_database)} registered personnel")
 
         recognized_id, confidence = recognize_face(
             face_embedding, face_database, threshold
         )
 
         if recognized_id is None:
-            app.logger.warning(
+            current_app.logger.warning(
                 f"Face not recognized. No match found above threshold {threshold}"
             )
             return (
@@ -206,7 +219,7 @@ def api_capture():
 
         # Log successful recognition
         personnel = Personnel.query.get(recognized_id)
-        app.logger.info(
+        current_app.logger.info(
             f"✓ Face recognized: {personnel.full_name} (ID: {recognized_id}, Confidence: {confidence:.3f})"
         )
 
@@ -231,7 +244,7 @@ def api_capture():
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return handle_api_exception(e)
 
 
 @attendance_bp.route("/manual", methods=["GET", "POST"])
@@ -420,15 +433,18 @@ def api_data():
 
     # Base query
     if current_user.is_admin:
-        query = Attendance.query.join(Personnel)
+        base_query = Attendance.query.join(Personnel)
     else:
-        query = Attendance.query.join(Personnel).filter(
+        base_query = Attendance.query.join(Personnel).filter(
             Personnel.station_id == current_user.id
         )
 
+    total_records = base_query.count()
+    filtered_query = base_query
+
     # Apply search
     if search_value:
-        query = query.filter(
+        filtered_query = filtered_query.filter(
             or_(
                 Personnel.first_name.contains(search_value),
                 Personnel.last_name.contains(search_value),
@@ -436,12 +452,11 @@ def api_data():
             )
         )
 
-    # Get total count
-    total_records = query.count()
+    filtered_records = filtered_query.count()
 
     # Apply pagination
     records = (
-        query.order_by(desc(Attendance.date), desc(Attendance.time_in))
+        filtered_query.order_by(desc(Attendance.date), desc(Attendance.time_in))
         .offset(start)
         .limit(length)
         .all()
@@ -483,7 +498,7 @@ def api_data():
         {
             "draw": draw,
             "recordsTotal": total_records,
-            "recordsFiltered": total_records,
+            "recordsFiltered": filtered_records,
             "data": data,
         }
     )

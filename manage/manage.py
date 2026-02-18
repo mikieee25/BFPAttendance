@@ -53,11 +53,14 @@ def show_menu():
     print("  2. Initialize fresh database")
     print("  3. Create database backup")
     print("  4. Migrate/Update database schema")
+    print(" 10. Run user-status + attendance-constraint migration")
+    print(" 12. Add performance indexes")
 
     print(f"\n{Colors.WARNING}Data Management:{Colors.ENDC}")
     print("  5. Clean all database data")
     print("  6. Clean personnel data only")
     print("  7. Generate fake data for testing")
+    print(" 11. Clean attendance records only")
 
     print(f"\n{Colors.OKCYAN}Utilities:{Colors.ENDC}")
     print("  8. List all available scripts")
@@ -79,9 +82,15 @@ def list_available_scripts():
     scripts = [
         ("config.py", "Base configuration and utilities"),
         ("migrate_database.py", "Database schema creation and migration"),
+        (
+            "migrate_user_status_and_attendance_constraint.py",
+            "Add user is_active and attendance uniqueness constraint",
+        ),
         ("backup_database.py", "Database backup and restore"),
         ("clean_database.py", "Clean all database data"),
         ("clean_personnel.py", "Clean personnel data only"),
+        ("clean_attendance.py", "Clean attendance records only"),
+        ("migrate_add_indexes.py", "Add performance indexes for common queries"),
         ("generate_fake_data.py", "Generate fake data for testing"),
         ("manage.py", "This main management console"),
     ]
@@ -158,7 +167,7 @@ def main():
             print()  # Add spacing
             show_menu()
             choice = input(
-                f"\n{Colors.BOLD}Enter your choice (0-9): {Colors.ENDC}"
+                f"\n{Colors.BOLD}Enter your choice (0-12): {Colors.ENDC}"
             ).strip()
 
             if choice == "1":
@@ -173,6 +182,8 @@ def main():
                 run_script("backup_database.py")
             elif choice == "4":
                 run_script("migrate_database.py")
+            elif choice == "10":
+                run_script("migrate_user_status_and_attendance_constraint.py")
             elif choice == "5":
                 print_warning("This will delete ALL data from the database!")
                 if input("Are you sure? (y/N): ").lower() in ["y", "yes"]:
@@ -183,6 +194,14 @@ def main():
                     run_script("clean_personnel.py")
             elif choice == "7":
                 run_script("generate_fake_data.py")
+            elif choice == "11":
+                print_warning(
+                    "This will delete attendance records for testing (personnel/face data kept)."
+                )
+                if input("Continue? (y/N): ").lower() in ["y", "yes"]:
+                    run_script("clean_attendance.py")
+            elif choice == "12":
+                run_script("migrate_add_indexes.py")
             elif choice == "8":
                 list_available_scripts()
             elif choice == "9":

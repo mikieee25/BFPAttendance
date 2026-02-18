@@ -50,6 +50,19 @@ MAX_IMAGE_SIZE_MB: int = 10
 MAX_IMAGE_SIZE_BYTES: int = MAX_IMAGE_SIZE_MB * 1024 * 1024
 
 
+def to_native_types(value: Any) -> Any:
+    """Convert numpy/scalar types to native Python types for JSON serialization."""
+    if isinstance(value, dict):
+        return {k: to_native_types(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [to_native_types(v) for v in value]
+    if isinstance(value, tuple):
+        return [to_native_types(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def get_yolo_model() -> YOLO:
     """Load and return the YOLO face detection model.
 
@@ -468,11 +481,18 @@ def load_face_database(
             logger.debug(f"Using cached face database (age: {cache_age:.1f}s)")
             # If station_id filter is needed, apply it to cached data
             if station_id is not None:
+                cached_ids = list(_face_db_cache.keys())
+                if not cached_ids:
+                    return {}
+                station_map = dict(
+                    db.session.query(Personnel.id, Personnel.station_id)
+                    .filter(Personnel.id.in_(cached_ids))
+                    .all()
+                )
                 return {
                     k: v
                     for k, v in _face_db_cache.items()
-                    if Personnel.query.get(k)
-                    and Personnel.query.get(k).station_id == station_id
+                    if station_map.get(k) == station_id
                 }
             return _face_db_cache.copy()
 
@@ -695,7 +715,7 @@ def process_attendance(
         current_time = datetime.now()
 
         # Define cooldown period
-        cooldown_seconds = current_app.config.get("ATTENDANCE_COOLDOWN", 60)
+        cooldown_seconds = current_app.config.get("ATTENDANCE_COOLDOWN", 5)
         cooldown_period = timedelta(seconds=cooldown_seconds)
 
         # Use database locking to prevent race conditions
@@ -706,68 +726,65 @@ def process_attendance(
             .first()
         )
 
-        # Check for any recent attendance within cooldown period
-        if attendance:
-            last_action_time = (
-                attendance.time_out if attendance.time_out else attendance.time_in
-            )
-            if last_action_time:
-                time_since_last_action = current_time - last_action_time
+        # Cooldown applies only between time-in and time-out.
+        # Once time-out is already recorded, return already_recorded immediately.
+        if attendance and attendance.time_out is None and attendance.time_in:
+            time_since_time_in = current_time - attendance.time_in
+            if time_since_time_in < cooldown_period:
+                remaining_seconds = (cooldown_period - time_since_time_in).total_seconds()
+                remaining_time = int(remaining_seconds)
 
-                if time_since_last_action < cooldown_period:
-                    remaining_seconds = (
-                        cooldown_period - time_since_last_action
-                    ).total_seconds()
-                    remaining_time = int(remaining_seconds)
-
-                    return {
-                        "success": True,
-                        "action": "cooldown",
-                        "personnel": {
-                            "id": personnel.id,
-                            "name": personnel.full_name,
-                            "station": personnel.station.station_type.value,
-                        },
-                        "message": f"Please wait {remaining_time} seconds before recording attendance again",
-                        "remaining_time": remaining_time,
-                        "time_in": (
-                            attendance.time_in.strftime("%I:%M:%S %p")
-                            if attendance.time_in
-                            else None
-                        ),
-                        "time_out": (
-                            attendance.time_out.strftime("%I:%M:%S %p")
-                            if attendance.time_out
-                            else None
-                        ),
-                    }
-
-        # If attendance record exists for today
-        if attendance:
-            # If time_out is not recorded yet, already have time-in
-            if attendance.time_out is None:
-                # Person already signed in for today
                 return {
                     "success": True,
-                    "action": "already_recorded",
+                    "action": "cooldown",
                     "personnel": {
                         "id": personnel.id,
                         "name": personnel.full_name,
                         "station": personnel.station.station_type.value,
                     },
-                    "message": "You have already recorded your time-in for today",
+                    "message": f"Time-in recorded at {attendance.time_in.strftime('%I:%M:%S %p')}. Please wait {remaining_time} seconds before recording time-out.",
+                    "remaining_time": remaining_time,
+                    "next_action": "time_out",
+                    "time_in": attendance.time_in.strftime("%I:%M:%S %p"),
+                    "time_out": None,
+                }
+
+        # If attendance record exists for today
+        if attendance:
+            # If only time-in exists, record time-out.
+            if attendance.time_out is None:
+                time_out_image = None
+                if base64_image:
+                    time_out_image = save_attendance_image(
+                        personnel.id, base64_image, "time_out"
+                    )
+
+                attendance.time_out = current_time
+                attendance.time_out_image = time_out_image
+                db.session.commit()
+
+                return {
+                    "success": True,
+                    "action": "time_out",
+                    "personnel": {
+                        "id": personnel.id,
+                        "name": personnel.full_name,
+                        "station": personnel.station.station_type.value,
+                    },
+                    "time": current_time.strftime("%I:%M:%S %p"),
                     "time_in": (
                         attendance.time_in.strftime("%I:%M:%S %p")
                         if attendance.time_in
                         else None
                     ),
-                    "time_out": None,
+                    "time_out": current_time.strftime("%I:%M:%S %p"),
                 }
             else:
                 # Already completed attendance for the day (both time-in and time-out)
                 return {
                     "success": True,
                     "action": "already_recorded",
+                    "message": "Attendance already completed for today.",
                     "personnel": {
                         "id": personnel.id,
                         "name": personnel.full_name,
@@ -1584,6 +1601,24 @@ def analyze_liveness(
             "checks_total": 1,
         }
 
+        # Enforce multi-frame liveness if configured
+        require_multi = False
+        min_frames = 3
+        try:
+            require_multi = current_app.config.get("LIVENESS_REQUIRE_MULTI_FRAME", False)
+            min_frames = current_app.config.get("LIVENESS_MIN_FRAMES", 3)
+        except Exception:
+            require_multi = False
+            min_frames = 3
+
+        total_frames = 1 + (len(previous_frames) if previous_frames else 0)
+        if require_multi and total_frames < min_frames:
+            liveness_details["method"] = "multi_frame_required"
+            liveness_details["error"] = (
+                f"Need at least {min_frames} frames for liveness detection"
+            )
+            return False, to_native_types(liveness_details)
+
         checks_passed = 0
         checks_total = 1  # Start with texture check
 
@@ -1593,7 +1628,7 @@ def analyze_liveness(
         liveness_details["texture_score"] = float(texture_score)
 
         # ENHANCED: Require higher texture score for single-check mode
-        if texture_live and texture_score >= 0.6:
+        if texture_live and texture_score >= 0.7:
             checks_passed += 1
 
         # 2. Motion-based liveness detection (if previous frames available)
@@ -1666,7 +1701,7 @@ def analyze_liveness(
         elif checks_total == 2:
             # Two checks available: both should pass OR one with very high score
             overall_live = (checks_passed >= 2) or (
-                checks_passed >= 1 and texture_score >= 0.75
+                checks_passed >= 1 and texture_score >= 0.8
             )
 
             scores = [texture_score]
@@ -1676,13 +1711,29 @@ def analyze_liveness(
         else:
             # Single check (texture only): require VERY high score
             # This is the fallback mode when no motion data is available
-            overall_live = texture_live and texture_score >= 0.7
+            overall_live = texture_live and texture_score >= 0.8
             confidence = texture_score
 
             # Log info about texture-only analysis
             logger.warning(
                 "⚠️ Liveness check using texture analysis only (no motion data) - using strict threshold"
             )
+
+        # If multi-frame is required, require at least one dynamic signal.
+        if require_multi:
+            dynamic_signals = [
+                liveness_details.get("motion_live") is True,
+                liveness_details.get("blink_detected") is True,
+                liveness_details.get("head_movement_live") is True,
+            ]
+            if not any(dynamic_signals):
+                liveness_details["overall_live"] = False
+                liveness_details["confidence"] = float(confidence)
+                liveness_details["failure_reason"] = "no_dynamic_signal"
+                logger.warning(
+                    "Liveness failed: no dynamic signal (motion/blink/head movement)"
+                )
+                return False, to_native_types(liveness_details)
 
         liveness_details["overall_live"] = overall_live
         liveness_details["confidence"] = float(confidence)
@@ -1700,11 +1751,17 @@ def analyze_liveness(
                 f"  Blink: {liveness_details['blink_detected']} (count: {liveness_details['blink_count']})"
             )
         if liveness_details["head_movement_live"] is not None:
-            logger.info(
-                f"  Head Movement: {liveness_details['head_movement_live']} ({liveness_details['head_movement_score']:.3f})"
-            )
+            head_movement_score = liveness_details["head_movement_score"]
+            if head_movement_score is None:
+                logger.info(
+                    f"  Head Movement: {liveness_details['head_movement_live']} (N/A)"
+                )
+            else:
+                logger.info(
+                    f"  Head Movement: {liveness_details['head_movement_live']} ({head_movement_score:.3f})"
+                )
 
-        return overall_live, liveness_details
+        return overall_live, to_native_types(liveness_details)
 
     except Exception as e:
         logger.error(f"Error in liveness analysis: {e}")
@@ -1772,6 +1829,29 @@ def process_base64_image(
 
         # Perform liveness detection if enabled
         if enable_liveness:
+            try:
+                require_multi = current_app.config.get(
+                    "LIVENESS_REQUIRE_MULTI_FRAME", False
+                )
+                min_frames = current_app.config.get("LIVENESS_MIN_FRAMES", 3)
+            except Exception:
+                require_multi = False
+                min_frames = 3
+
+            total_frames = 1 + (len(previous_frames) if previous_frames else 0)
+            if require_multi and total_frames < min_frames:
+                return (
+                    None,
+                    {
+                        "liveness_failed": True,
+                        "liveness_details": {
+                            "method": "multi_frame_required",
+                            "error": f"Need at least {min_frames} frames for liveness detection",
+                        },
+                    },
+                    None,
+                )
+
             logger.info("=== Starting Liveness Detection ===")
             is_live, liveness_details = analyze_liveness(img, bbox, previous_frames)
             logger.info(
@@ -1810,6 +1890,15 @@ def process_base64_image(
 
         # Extract face embedding
         face_embedding, face_metadata = extract_face_embeddings(temp_path)
+
+        # Add capture metadata for quality feedback
+        if face_metadata is not None:
+            img_height, img_width = img.shape[:2]
+            face_metadata["image_width"] = int(img_width)
+            face_metadata["image_height"] = int(img_height)
+            bbox_area = max(0, (bbox[2] - bbox[0])) * max(0, (bbox[3] - bbox[1]))
+            image_area = max(1, img_width * img_height)
+            face_metadata["face_area_ratio"] = float(bbox_area / image_area)
 
         # Add liveness info to metadata if performed
         if enable_liveness and face_metadata:
@@ -1850,6 +1939,8 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
         os.makedirs(folder_path, exist_ok=True)
 
         registered_images = []
+        quality_report = []
+        best_face_candidate = None
 
         # Process each image
         logger.info(f"Processing {len(base64_images)} images")
@@ -1888,18 +1979,59 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
                 logger.info(
                     f"Saving face data to database for personnel {personnel_id}"
                 )
+                # Assess capture quality for user feedback
+                confidence_score = (
+                    face_metadata.get("confidence") if face_metadata else None
+                )
+                face_area_ratio = (
+                    face_metadata.get("face_area_ratio") if face_metadata else None
+                )
+                quality = "poor"
+                issues = []
+                if confidence_score is None:
+                    issues.append("No detection confidence")
+                elif confidence_score < 0.55:
+                    issues.append("Low detection confidence")
+
+                if face_area_ratio is None:
+                    issues.append("Missing face size data")
+                elif face_area_ratio < 0.05:
+                    issues.append("Face too small in frame")
+
+                if not issues:
+                    if confidence_score >= 0.7 and face_area_ratio >= 0.08:
+                        quality = "good"
+                    else:
+                        quality = "ok"
+
+                quality_entry = {
+                    "filename": filename,
+                    "quality": quality,
+                    "confidence": float(confidence_score or 0.0),
+                    "face_area_ratio": float(face_area_ratio or 0.0),
+                    "issues": issues,
+                }
+                quality_report.append(quality_entry)
+
                 face_data = FaceData(
                     personnel_id=personnel_id,
                     filename=filename,
                     embedding=json.dumps(face_embedding),
-                    confidence=(
-                        face_metadata.get("confidence") if face_metadata else None
-                    ),
+                    confidence=confidence_score,
                 )
 
                 db.session.add(face_data)
                 registered_images.append(filename)
                 logger.info(f"Added face data for image {i + 1}")
+
+                # Track best face candidate for profile image selection
+                quality_weight = {"good": 2, "ok": 1, "poor": 0}.get(quality, 0)
+                score = (quality_weight * 10.0) + float(confidence_score or 0.0)
+                if best_face_candidate is None or score > best_face_candidate["score"]:
+                    best_face_candidate = {
+                        "score": score,
+                        "filename": filename,
+                    }
 
             except Exception as e:
                 logger.error(f"Error registering face image {i}: {e}")
@@ -1909,8 +2041,12 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
 
         # Set profile image if not already set
         if len(registered_images) > 0:
-            # Use the first successfully registered face image as profile photo
-            best_face = registered_images[0]  # Just use the first one for now
+            # Use the best quality face image as profile photo
+            best_face = (
+                best_face_candidate["filename"]
+                if best_face_candidate is not None
+                else registered_images[0]
+            )
 
             # Get the correct path format for static files
             relative_path = os.path.join(
@@ -1936,10 +2072,19 @@ def register_face(personnel_id: int, base64_images: List[str]) -> Dict[str, Any]
         # Clear face database cache since we added new face data
         clear_face_database_cache()
 
+        quality_summary = {
+            "good": sum(1 for item in quality_report if item["quality"] == "good"),
+            "ok": sum(1 for item in quality_report if item["quality"] == "ok"),
+            "poor": sum(1 for item in quality_report if item["quality"] == "poor"),
+            "total": len(quality_report),
+        }
+
         return {
             "success": True,
             "message": f"Successfully registered {len(registered_images)} face images",
             "registered_images": registered_images,
+            "quality_report": quality_report,
+            "quality_summary": quality_summary,
         }
 
     except Exception as e:

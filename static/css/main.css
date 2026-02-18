@@ -650,6 +650,44 @@ h6,
 
 /* Responsive Design */
 @media (min-width: 768px) {
+  html.sidebar-precollapsed .sidebar {
+    width: 80px;
+  }
+
+  html.sidebar-precollapsed .sidebar .sidebar-header {
+    display: none;
+  }
+
+  html.sidebar-precollapsed .sidebar .sidebar-collapsed-logo {
+    display: block;
+  }
+
+  html.sidebar-precollapsed .sidebar .nav-text {
+    display: none;
+  }
+
+  html.sidebar-precollapsed .sidebar .nav-link {
+    justify-content: center;
+    padding: 12px;
+    margin: 0.25rem 0.125rem;
+  }
+
+  html.sidebar-precollapsed .sidebar .nav-icon {
+    margin-right: 0 !important;
+  }
+
+  html.sidebar-precollapsed .sidebar .sidebar-divider {
+    margin: 10px 0;
+  }
+
+  html.sidebar-precollapsed .sidebar .sidebar-collapse-btn {
+    transform: rotate(180deg);
+  }
+
+  html.sidebar-precollapsed .main-content {
+    margin-left: 80px;
+  }
+
   .sidebar {
     transform: translateX(0);
     position: fixed;

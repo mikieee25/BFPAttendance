@@ -217,7 +217,9 @@ Attendance System{% endblock %} {% block content %}
                   </span>
                 </td>
                 <td>
-                  <span class="badge bg-success">Active</span>
+                  <span class="badge bg-{{ 'success' if station.is_active else 'secondary' }}">
+                    {{ 'Active' if station.is_active else 'Inactive' }}
+                  </span>
                 </td>
                 <td>
                   {{ station.date_created.strftime('%m/%d/%Y') if
@@ -323,8 +325,9 @@ Attendance System{% endblock %} {% block content %}
               type="text"
               class="form-control"
               id="editStationName"
-              required
+              readonly
             />
+            <small class="text-muted">Derived from station type.</small>
           </div>
           <div class="mb-3">
             <label for="editStationEmail" class="form-label"
@@ -400,7 +403,9 @@ Attendance System{% endblock %} {% block content %}
                 <p><strong>Created:</strong> ${
                   station.date_created || "N/A"
                 }</p>
-                <p><strong>Status:</strong> <span class="badge bg-success">Active</span></p>
+                <p><strong>Status:</strong> <span class="badge bg-${
+                  station.is_active ? "success" : "secondary"
+                }">${station.is_active ? "Active" : "Inactive"}</span></p>
               </div>
             </div>
           `;
@@ -448,7 +453,6 @@ Attendance System{% endblock %} {% block content %}
     const form = document.getElementById("editStationForm");
     const stationId = form.dataset.stationId;
     const formData = {
-      station_name: document.getElementById("editStationName").value,
       email: document.getElementById("editStationEmail").value,
       station_type: document.getElementById("editStationType").value,
     };

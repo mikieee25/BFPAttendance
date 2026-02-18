@@ -4,6 +4,7 @@
 # Flask framework imports
 from flask import (
     Blueprint,
+    current_app,
     render_template,
     request,
     jsonify,
@@ -12,17 +13,65 @@ from flask import (
     flash,
 )
 from flask_login import login_required, current_user
+import os
 
 # File handling and utilities
 from datetime import datetime
 
 # Database models
-from models import db, Personnel, User, FaceData, ActivityLog
+from sqlalchemy import func, or_
+from werkzeug.security import generate_password_hash
+
+from models import db, Personnel, User, FaceData, ActivityLog, Attendance, StationType
+from utils import handle_api_exception, is_ajax_or_json_request
 
 # Face recognition service
 from face_rec_module.face_service import register_face
 
 personnel_bp = Blueprint("personnel", __name__)
+
+
+def _get_or_create_station_users():
+    """Return one non-admin user per station type, creating missing station users if needed."""
+    station_users = User.query.filter_by(is_admin=False).all()
+    by_station_type = {user.station_type: user for user in station_users}
+    created_count = 0
+
+    for station_type in StationType:
+        if station_type in by_station_type:
+            continue
+
+        base_username = f"{station_type.value.lower()}_station"
+        username = base_username
+        suffix = 1
+        while User.query.filter_by(username=username).first():
+            username = f"{base_username}{suffix}"
+            suffix += 1
+
+        base_email = f"{station_type.value.lower()}@bfp-sorsogon.gov.ph"
+        email = base_email
+        suffix = 1
+        while User.query.filter_by(email=email).first():
+            email = f"{station_type.value.lower()}{suffix}@bfp-sorsogon.gov.ph"
+            suffix += 1
+
+        default_password = os.environ.get("DEFAULT_STATION_PASSWORD", "station123")
+        station_user = User(
+            username=username,
+            email=email,
+            password=generate_password_hash(default_password),
+            station_type=station_type,
+            is_admin=False,
+            must_change_password=True,
+        )
+        db.session.add(station_user)
+        by_station_type[station_type] = station_user
+        created_count += 1
+
+    if created_count > 0:
+        db.session.commit()
+
+    return [by_station_type[station_type] for station_type in StationType]
 
 
 @personnel_bp.route("/")
@@ -49,14 +98,30 @@ def index():
 
     personnel = query.all()
 
+    # Precompute last attendance date per personnel for display.
+    last_attendance_map = {}
+    if personnel:
+        personnel_ids = [person.id for person in personnel]
+        last_attendance_rows = (
+            db.session.query(Attendance.personnel_id, func.max(Attendance.date))
+            .filter(Attendance.personnel_id.in_(personnel_ids))
+            .group_by(Attendance.personnel_id)
+            .all()
+        )
+        last_attendance_map = {
+            personnel_id: last_date
+            for personnel_id, last_date in last_attendance_rows
+        }
+
     # Get all stations for the dropdown (admin only)
-    stations = User.query.all() if current_user.is_admin else [current_user]
+    stations = _get_or_create_station_users() if current_user.is_admin else [current_user]
 
     return render_template(
         "personnel/index.html",
         personnel=personnel,
         stations=stations,
         show_inactive=show_inactive,
+        last_attendance_map=last_attendance_map,
     )
 
 
@@ -73,7 +138,7 @@ def register():
 
     # Get available stations for dropdown (filtered by user permissions)
     if current_user.is_admin:
-        stations = User.query.all()  # Admin can assign to any station
+        stations = _get_or_create_station_users()  # Admin can assign to all stations
     else:
         stations = [current_user]  # Station users can only assign to their station
 
@@ -94,10 +159,7 @@ def add():
             # Validation
             if not all([first_name, last_name, rank, station_id]):
                 # Check if AJAX request (XMLHttpRequest header)
-                if (
-                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                    or request.accept_mimetypes.accept_json
-                ):
+                if is_ajax_or_json_request():
                     return jsonify(
                         {
                             "success": False,
@@ -107,26 +169,26 @@ def add():
                 flash("Please fill in all required fields", "error")
                 return redirect(url_for("personnel.add"))
 
-            # Convert station_id to integer
-            try:
-                station_id = int(station_id)
-            except ValueError:
-                if (
-                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                    or request.accept_mimetypes.accept_json
-                ):
-                    return jsonify(
-                        {"success": False, "error": "Invalid station selection"}
-                    )
-                flash("Invalid station selection", "error")
-                return redirect(url_for("personnel.add"))
+            # Station users are always locked to their own station account.
+            if not current_user.is_admin:
+                station_id = current_user.id
+            else:
+                # Ensure station users exist for all station types.
+                _get_or_create_station_users()
+                # Convert station_id to integer
+                try:
+                    station_id = int(station_id)
+                except ValueError:
+                    if is_ajax_or_json_request():
+                        return jsonify(
+                            {"success": False, "error": "Invalid station selection"}
+                        )
+                    flash("Invalid station selection", "error")
+                    return redirect(url_for("personnel.add"))
 
             # Validate station access
             if not current_user.is_admin and station_id != current_user.id:
-                if (
-                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                    or request.accept_mimetypes.accept_json
-                ):
+                if is_ajax_or_json_request():
                     return jsonify(
                         {
                             "success": False,
@@ -200,10 +262,7 @@ def add():
             db.session.commit()
 
             # Check if AJAX request
-            if (
-                request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.accept_mimetypes.accept_json
-            ):
+            if is_ajax_or_json_request():
                 return jsonify(
                     {
                         "success": True,
@@ -217,18 +276,14 @@ def add():
 
         except Exception as e:
             db.session.rollback()
-            # Check if AJAX request
-            if (
-                request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.accept_mimetypes.accept_json
-            ):
-                return jsonify({"success": False, "error": str(e)})
-            flash(f"Error adding personnel: {str(e)}", "error")
+            if is_ajax_or_json_request():
+                return handle_api_exception(e, "Unable to add personnel.")
+            flash("Error adding personnel.", "error")
             return redirect(url_for("personnel.add"))
 
     # Get stations for dropdown
     if current_user.is_admin:
-        stations = User.query.all()
+        stations = _get_or_create_station_users()
     else:
         stations = [current_user]
 
@@ -311,7 +366,7 @@ def edit(personnel_id):
 
     # Get stations for dropdown
     if current_user.is_admin:
-        stations = User.query.all()
+        stations = _get_or_create_station_users()
     else:
         stations = [current_user]
 
@@ -489,34 +544,65 @@ def api_register_face(personnel_id):
         return jsonify(result)
 
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception("Error registering face for personnel %s", personnel_id)
+        return handle_api_exception(e)
 
 
 @personnel_bp.route("/api/data")
 @login_required
 def api_data():
     """DataTables API endpoint"""
+    draw = request.args.get("draw", 1, type=int)
+    start = request.args.get("start", 0, type=int)
+    length = request.args.get("length", 25, type=int)
+    search_value = request.args.get("search[value]", "").strip()
+
     # Get show_inactive parameter
     show_inactive = request.args.get("show_inactive", "false") == "true"
 
     # Get personnel based on user role
     if current_user.is_admin:
-        query = Personnel.query
+        base_query = Personnel.query
     else:
-        query = Personnel.query.filter_by(station_id=current_user.id)
+        base_query = Personnel.query.filter_by(station_id=current_user.id)
 
     # Filter by active status unless show_inactive is True
     if not show_inactive:
-        query = query.filter_by(is_active=True)
+        base_query = base_query.filter_by(is_active=True)
 
-    personnel = query.all()
+    total_records = base_query.count()
+    filtered_query = base_query
+    if search_value:
+        filtered_query = filtered_query.filter(
+            or_(
+                Personnel.first_name.contains(search_value),
+                Personnel.last_name.contains(search_value),
+                Personnel.rank.contains(search_value),
+            )
+        )
+    filtered_records = filtered_query.count()
+
+    personnel = (
+        filtered_query.order_by(Personnel.last_name.asc(), Personnel.first_name.asc())
+        .offset(start)
+        .limit(length)
+        .all()
+    )
+
+    personnel_ids = [p.id for p in personnel]
+    face_counts = {}
+    if personnel_ids:
+        counts = (
+            db.session.query(FaceData.personnel_id, func.count(FaceData.id))
+            .filter(FaceData.personnel_id.in_(personnel_ids))
+            .group_by(FaceData.personnel_id)
+            .all()
+        )
+        face_counts = {personnel_id: count for personnel_id, count in counts}
 
     data = []
     for p in personnel:
-        face_count = FaceData.query.filter_by(personnel_id=p.id).count()
+        face_count = face_counts.get(p.id, 0)
 
         # Build status badge
         status_badge = (
@@ -586,4 +672,11 @@ def api_data():
             }
         )
 
-    return jsonify({"data": data})
+    return jsonify(
+        {
+            "draw": draw,
+            "recordsTotal": total_records,
+            "recordsFiltered": filtered_records,
+            "data": data,
+        }
+    )

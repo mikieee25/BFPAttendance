@@ -2,14 +2,16 @@
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 
 from dotenv import load_dotenv
 
 # Flask core framework and utilities
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, logout_user
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import generate_password_hash
 
 # Face recognition service (imported but not used in app.py - available for blueprints)
@@ -20,12 +22,6 @@ from models import AttendanceStatus, StationType, User, db
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("bfp_attendance.log"), logging.StreamHandler()],
-)
 logger = logging.getLogger(__name__)
 
 # Warn if interpreter differs from the project's .python-version (3.11.14)
@@ -42,6 +38,8 @@ if (sys.version_info.major, sys.version_info.minor) != (3, 11):
 def create_app():
     """Create and configure the Flask application instance"""
     app = Flask(__name__)
+
+    _configure_logging()
 
     # Application configuration settings
     # Security: Require SECRET_KEY in production
@@ -70,6 +68,7 @@ def create_app():
         app.root_path, "static", "images", "attendance_temp"
     )
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
+    app.config["WTF_CSRF_TIME_LIMIT"] = 3600
 
     # Face recognition settings
     app.config["YOLO_MODEL_PATH"] = os.path.join(
@@ -83,6 +82,9 @@ def create_app():
     app.config["WORK_START_TIME"] = "08:00"
     app.config["ATTENDANCE_COOLDOWN"] = 5  # seconds
     app.config["ATTENDANCE_IMAGE_RETENTION_DAYS"] = 7
+    app.config["PRELOAD_FACE_MODELS"] = (
+        os.environ.get("PRELOAD_FACE_MODELS", "true").lower() == "true"
+    )
 
     # Enhanced face detection settings (InsightFace)
     # Set to True to use InsightFace (requires: pip install insightface onnxruntime)
@@ -91,6 +93,24 @@ def create_app():
         os.environ.get("USE_INSIGHTFACE", "false").lower() == "true"
     )
 
+    _validate_runtime_requirements(app)
+
+    # Preload face recognition models to reduce first-capture delay.
+    if app.config.get("PRELOAD_FACE_MODELS", True):
+        try:
+            with app.app_context():
+                from face_rec_module.face_service import (
+                    get_insightface_app,
+                    get_yolo_model,
+                )
+
+                get_yolo_model()
+                if app.config.get("USE_INSIGHTFACE", False):
+                    get_insightface_app()
+            logger.info("Face recognition models preloaded successfully.")
+        except Exception as exc:
+            logger.warning("Model preload failed: %s", exc)
+
     # Liveness detection settings
     app.config["LIVENESS_TEXTURE_THRESHOLD"] = (
         0.75  # Practical security - blocks most photos while allowing live faces
@@ -98,6 +118,7 @@ def create_app():
     app.config["LIVENESS_REQUIRE_MULTI_FRAME"] = (
         True  # Require multiple frames for enhanced security
     )
+    app.config["LIVENESS_MIN_FRAMES"] = 3  # Minimum frames required for liveness
     app.config["LIVENESS_MIN_FRAME_DIFFERENCE"] = (
         0.02  # Minimum change between frames to detect motion
     )
@@ -110,6 +131,7 @@ def create_app():
 
     # Initialize database extension with app context
     db.init_app(app)
+    CSRFProtect(app)
 
     # Configure Flask-Login for user session management
     login_manager = LoginManager()
@@ -162,6 +184,22 @@ def create_app():
             return redirect(url_for("dashboard.index"))
         return redirect(url_for("auth.login"))
 
+    @app.before_request
+    def enforce_active_session():
+        """Immediately revoke sessions for deactivated users."""
+        if not current_user.is_authenticated:
+            return None
+
+        # Let logout endpoint run without interruption.
+        if request.endpoint == "auth.logout":
+            return None
+
+        if not getattr(current_user, "is_active", True):
+            logout_user()
+            flash("Your account is inactive. Please contact an administrator.", "error")
+            return redirect(url_for("auth.login"))
+        return None
+
     # Custom error page handlers
     @app.errorhandler(404)
     def not_found_error(error):
@@ -202,29 +240,86 @@ def create_app():
         """Make StationType and AttendanceStatus enums available in all templates"""
         return dict(StationType=StationType, AttendanceStatus=AttendanceStatus)
 
-    # Initialize database and create default admin user
+    # Initialize database and optionally create bootstrap admin user
     with app.app_context():
         db.create_all()  # Create all database tables
 
-        # Create default admin user if it doesn't exist
-        admin = User.query.filter_by(username="admin").first()
-        if not admin:
-            admin = User(
-                username="admin",
-                email="admin@bfp.gov.ph",
-                password=generate_password_hash("admin123"),
-                station_type=StationType.CENTRAL,
-                is_admin=True,
-                must_change_password=True,  # Force password change on first login
-            )
-            db.session.add(admin)
-            db.session.commit()
-            logger.warning(
-                "Default admin user created with username 'admin' and password 'admin123'. "
-                "IMPORTANT: Change this password immediately after first login!"
-            )
+        auto_create_admin = os.environ.get("AUTO_CREATE_ADMIN", "false").lower() == "true"
+        if auto_create_admin:
+            admin = User.query.filter_by(is_admin=True).first()
+            if not admin:
+                admin_username = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
+                admin_email = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@bfp.gov.ph")
+                admin_password = os.environ.get("DEFAULT_ADMIN_PASSWORD")
+
+                if not admin_password:
+                    raise RuntimeError(
+                        "AUTO_CREATE_ADMIN is enabled but DEFAULT_ADMIN_PASSWORD is not set."
+                    )
+
+                admin = User(
+                    username=admin_username,
+                    email=admin_email,
+                    password=generate_password_hash(admin_password),
+                    station_type=StationType.CENTRAL,
+                    is_admin=True,
+                    must_change_password=True,  # Force password change on first login
+                )
+                db.session.add(admin)
+                db.session.commit()
+                logger.warning(
+                    "Bootstrap admin created from environment settings. "
+                    "Change the password immediately after first login."
+                )
 
     return app
+
+
+def _configure_logging():
+    """Set up app logging with file rotation to avoid unbounded log growth."""
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.handlers.clear()
+
+    file_handler = RotatingFileHandler(
+        "bfp_attendance.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+
+
+def _validate_runtime_requirements(app):
+    """Log missing runtime packages and critical resource issues at startup."""
+    required_modules = ["cv2", "numpy", "torch", "ultralytics", "scipy"]
+    missing_modules = []
+
+    for module_name in required_modules:
+        try:
+            __import__(module_name)
+        except ImportError:
+            missing_modules.append(module_name)
+
+    if missing_modules:
+        app.logger.error(
+            "Missing required runtime modules: %s. Install dependencies from requirements.txt.",
+            ", ".join(missing_modules),
+        )
+
+    yolo_model_path = os.path.join(app.root_path, "face_rec_module", "yolov11n-face.pt")
+    if not os.path.exists(yolo_model_path):
+        app.logger.warning("YOLO model file not found at %s", yolo_model_path)
 
 
 if __name__ == "__main__":

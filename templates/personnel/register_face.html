@@ -80,6 +80,7 @@ content %}
             <li>Ensure good lighting and remove glasses if possible</li>
             <li>Look directly at the camera</li>
             <li>Multiple angles will be captured for better recognition</li>
+            <li>Each capture starts with a 3-second countdown timer</li>
           </ul>
         </div>
 
@@ -141,6 +142,11 @@ content %}
               >
                 <i class="fas fa-sync me-2"></i>Switch Camera
               </button>
+              <div id="captureCountdown" class="mt-3" style="display: none">
+                <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+                  Capturing in <span id="countdownValue">3</span>s...
+                </span>
+              </div>
             </div>
           </div>
 
@@ -166,6 +172,7 @@ content %}
                 <div id="capturedFaces">
                   <p class="text-muted">No faces captured yet</p>
                 </div>
+                <div id="qualityFeedback" class="mt-3" style="display: none"></div>
 
                 <div class="d-grid gap-2 mt-3">
                   <button
@@ -282,8 +289,11 @@ content %}
   let canvas;
   let stream;
   let capturedFaces = [];
+  let captureQualities = [];
   let currentCamera = 0;
   let cameras = [];
+  let isCaptureInProgress = false;
+  const CAPTURE_COUNTDOWN_SECONDS = 3;
 
   // Initialize camera when page loads
   document.addEventListener("DOMContentLoaded", function () {
@@ -431,7 +441,7 @@ content %}
     // Capture button
     document
       .getElementById("captureBtn")
-      .addEventListener("click", captureFrame);
+      .addEventListener("click", startCaptureCountdown);
 
     // Switch camera button
     document
@@ -465,6 +475,37 @@ content %}
       .addEventListener("click", resetCaptures);
   }
 
+  async function startCaptureCountdown() {
+    if (isCaptureInProgress) return;
+    if (!video || !canvas || !stream) return;
+
+    isCaptureInProgress = true;
+    const captureBtn = document.getElementById("captureBtn");
+    const switchCameraBtn = document.getElementById("switchCameraBtn");
+    const countdownContainer = document.getElementById("captureCountdown");
+    const countdownValue = document.getElementById("countdownValue");
+
+    captureBtn.disabled = true;
+    switchCameraBtn.disabled = true;
+    countdownContainer.style.display = "block";
+
+    let seconds = CAPTURE_COUNTDOWN_SECONDS;
+    countdownValue.textContent = String(seconds);
+
+    const countdownInterval = setInterval(async () => {
+      seconds -= 1;
+      countdownValue.textContent = String(Math.max(seconds, 0));
+
+      if (seconds <= 0) {
+        clearInterval(countdownInterval);
+        countdownContainer.style.display = "none";
+        await captureFrame();
+        switchCameraBtn.disabled = false;
+        isCaptureInProgress = false;
+      }
+    }, 1000);
+  }
+
   async function captureFrame() {
     if (!video || !canvas) return;
 
@@ -481,8 +522,6 @@ content %}
 
           // Show loading state
           const captureBtn = document.getElementById("captureBtn");
-          const originalText = captureBtn.innerHTML;
-          captureBtn.disabled = true;
           captureBtn.innerHTML =
             '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
 
@@ -495,10 +534,23 @@ content %}
             }
           );
 
+          if (response.redirected && response.url.includes("/auth/login")) {
+            throw new Error("Session expired. Please log in again.");
+          }
+
+          const contentType = response.headers.get("content-type") || "";
+          if (!contentType.includes("application/json")) {
+            throw new Error("Unexpected server response. Please refresh.");
+          }
+
           const result = await response.json();
 
           if (result.success) {
-            addCapturedFace();
+            const qualityInfo =
+              result.quality_report && result.quality_report.length > 0
+                ? result.quality_report[0]
+                : null;
+            addCapturedFace(qualityInfo);
             updateProgress();
           } else {
             alert("Error: " + result.error);
@@ -519,21 +571,82 @@ content %}
     );
   }
 
-  function addCapturedFace() {
+  function addCapturedFace(qualityInfo) {
     capturedFaces.push(Date.now());
+    if (qualityInfo) {
+      captureQualities.push(qualityInfo);
+    }
 
     const container = document.getElementById("capturedFaces");
     if (capturedFaces.length === 1) {
       container.innerHTML = "";
     }
 
+    let qualityBadge = "";
+    let qualityDetails = "";
+    if (qualityInfo) {
+      const quality = qualityInfo.quality || "poor";
+      const badgeClass =
+        quality === "good"
+          ? "bg-success"
+          : quality === "ok"
+          ? "bg-warning text-dark"
+          : "bg-danger";
+
+      qualityBadge = `<span class="badge ${badgeClass} ms-2 text-uppercase">${quality}</span>`;
+
+      if (Array.isArray(qualityInfo.issues) && qualityInfo.issues.length > 0) {
+        qualityDetails = `
+          <div class="text-muted small mt-1">
+            ${qualityInfo.issues.join(", ")}
+          </div>
+        `;
+      }
+    }
+
     const faceDiv = document.createElement("div");
     faceDiv.className = "mb-2";
     faceDiv.innerHTML = `
         <i class="fas fa-check-circle text-success me-2"></i>
-        Face ${capturedFaces.length} captured
+        Face ${capturedFaces.length} captured ${qualityBadge}
+        ${qualityDetails}
     `;
     container.appendChild(faceDiv);
+
+    updateQualityFeedback();
+  }
+
+  function updateQualityFeedback() {
+    const container = document.getElementById("qualityFeedback");
+    if (captureQualities.length === 0) {
+      container.style.display = "none";
+      container.innerHTML = "";
+      return;
+    }
+
+    const good = captureQualities.filter((q) => q.quality === "good").length;
+    const ok = captureQualities.filter((q) => q.quality === "ok").length;
+    const poor = captureQualities.filter((q) => q.quality === "poor").length;
+    const total = captureQualities.length;
+
+    let tips = "";
+    if (poor > 0) {
+      tips = `
+        <div class="alert alert-warning mt-2 mb-0">
+          <small>
+            Tips: move closer to the camera, improve lighting, and keep your face centered.
+          </small>
+        </div>
+      `;
+    }
+
+    container.style.display = "block";
+    container.innerHTML = `
+      <div class="small text-muted">
+        Quality summary: ${good} good, ${ok} ok, ${poor} poor (Total: ${total})
+      </div>
+      ${tips}
+    `;
   }
 
   function updateProgress() {
@@ -552,8 +665,11 @@ content %}
 
   function resetCaptures() {
     capturedFaces = [];
+    captureQualities = [];
     document.getElementById("capturedFaces").innerHTML =
       '<p class="text-muted">No faces captured yet</p>';
+    document.getElementById("qualityFeedback").style.display = "none";
+    document.getElementById("qualityFeedback").innerHTML = "";
     document.getElementById("progressBar").style.width = "0%";
     document.getElementById("progressBar").textContent = "0%";
     document.getElementById("completeBtn").style.display = "none";
