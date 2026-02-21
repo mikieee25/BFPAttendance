@@ -1,0 +1,766 @@
+{% extends "kiosk/base_kiosk.html" %} {% block title %}BFP Attendance Kiosk{% endblock %} {% block content %}
+<div class="row g-3" style="flex: 1">
+  <!-- LEFT: Action Buttons -->
+  <div class="col-lg-5 d-flex flex-column gap-3">
+    <!-- Main action buttons -->
+    <div class="kiosk-card">
+      <div class="kiosk-card-header"><i class="fas fa-fingerprint"></i> Record Attendance</div>
+      <div class="kiosk-card-body d-flex flex-column gap-3">
+        <button class="kiosk-action-btn btn-time-in" id="btnTimeIn" onclick="startCapture('TIME_IN')">
+          <i class="fas fa-sign-in-alt"></i>
+          Time In
+        </button>
+
+        <button class="kiosk-action-btn btn-time-out" id="btnTimeOut" onclick="startCapture('TIME_OUT')">
+          <i class="fas fa-sign-out-alt"></i>
+          Time Out
+        </button>
+
+        <button class="kiosk-action-btn btn-manual" id="btnManual" onclick="openManualModal()">
+          <i class="fas fa-edit me-2"></i>Manual Entry
+        </button>
+      </div>
+    </div>
+
+    <!-- Status / result panel -->
+    <div class="kiosk-card" id="statusCard" style="display: none">
+      <div class="kiosk-card-header" id="statusCardHeader"><i class="fas fa-info-circle"></i> Result</div>
+      <div class="kiosk-card-body" id="statusCardBody">
+        <!-- filled dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Recent Attendance -->
+  <div class="col-lg-7 d-flex flex-column">
+    <div class="kiosk-card h-100 d-flex flex-column">
+      <div class="kiosk-card-header justify-content-between">
+        <span><i class="fas fa-history me-1"></i> Recently Recorded</span>
+        <span class="badge bg-secondary" id="recentCount"> {{ recent_attendance | length }} </span>
+      </div>
+      <div class="kiosk-card-body flex-grow-1" style="overflow-y: auto; max-height: 70vh">
+        <div class="d-flex flex-column gap-2" id="recentList">
+          {% if recent_attendance %} {% for record in recent_attendance %}
+          <div class="recent-item">
+            <img
+              src="{{ url_for('static', filename=record.personnel.image_path if record.personnel.image_path else 'images/profile-placeholder.jpg') }}"
+              alt="{{ record.personnel.full_name }}"
+              class="avatar"
+            />
+            <div class="info">
+              <div class="name">{{ record.personnel.name_with_rank }}</div>
+              <div class="meta">{{ record.personnel.station.station_name }}</div>
+            </div>
+            <div class="text-end flex-shrink-0">
+              {% if record.time_in and not record.time_out %}
+              <span class="badge bg-success badge-time d-block mb-1"> IN {{ record.time_in.strftime('%H:%M') }} </span>
+              {% elif record.time_out %}
+              <span class="badge bg-info text-dark badge-time d-block mb-1"> OUT {{ record.time_out.strftime('%H:%M') }} </span>
+              {% endif %} {% if record.status %} {% if record.status.value == 'PRESENT' %}
+              <span class="badge bg-success">Present</span>
+              {% elif record.status.value == 'LATE' %}
+              <span class="badge bg-warning text-dark">Late</span>
+              {% elif record.status.value == 'ON_LEAVE' %}
+              <span class="badge bg-secondary">On Leave</span>
+              {% else %}
+              <span class="badge bg-danger">{{ record.status.value.title() }}</span>
+              {% endif %} {% endif %}
+            </div>
+          </div>
+          {% endfor %} {% else %}
+          <div class="text-center py-5" id="emptyRecentMsg">
+            <i class="fas fa-inbox fa-3x mb-3" style="color: var(--kiosk-muted)"></i>
+            <p style="color: var(--kiosk-muted)">No attendance recorded today yet.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     CAMERA CAPTURE MODAL
+════════════════════════════════════════════════════════ -->
+<div
+  class="modal fade kiosk-modal"
+  id="cameraModal"
+  tabindex="-1"
+  data-bs-backdrop="static"
+  data-bs-keyboard="false"
+  aria-labelledby="cameraModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" id="cameraModalHeader">
+        <h5 class="modal-title" id="cameraModalLabel">
+          <i class="fas fa-camera me-2"></i>
+          <span id="cameraModalTitle">Recording Attendance</span>
+        </h5>
+      </div>
+
+      <div class="modal-body text-center p-4" id="cameraBody">
+        <!-- Camera feed with countdown overlay -->
+        <div class="position-relative d-inline-block w-100" style="max-width: 520px">
+          <video id="kioskVideo" autoplay playsinline></video>
+          <canvas id="kioskCanvas" width="640" height="480"></canvas>
+          <div class="countdown-overlay" id="countdownOverlay" style="display: none"></div>
+        </div>
+
+        <!-- Capture progress bar (frame collection) -->
+        <div class="mt-3" id="captureProgressWrapper" style="display: none">
+          <div class="progress" style="height: 20px; background: rgba(255, 255, 255, 0.1)">
+            <div
+              class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+              id="captureProgressBar"
+              role="progressbar"
+              style="width: 0%"
+            >
+              Capturing…
+            </div>
+          </div>
+        </div>
+
+        <!-- Status text -->
+        <div class="mt-3" id="cameraStatus">
+          <div class="d-flex align-items-center justify-content-center gap-2" style="color: var(--kiosk-muted)">
+            <div class="kiosk-spinner" style="width: 24px; height: 24px; border-width: 3px"></div>
+            Initializing camera…
+          </div>
+        </div>
+
+        <!-- Processing state -->
+        <div class="mt-3" id="processingState" style="display: none">
+          <div class="d-flex align-items-center justify-content-center gap-2" style="color: var(--kiosk-muted)">
+            <div class="kiosk-spinner" style="width: 24px; height: 24px; border-width: 3px"></div>
+            Processing face recognition…
+          </div>
+        </div>
+      </div>
+
+      <!-- Result shown after capture (replaces body) -->
+      <div class="modal-body p-4" id="captureResultBody" style="display: none">
+        <!-- filled dynamically -->
+      </div>
+
+      <!-- Auto-close countdown (shown in result state) -->
+      <div class="modal-footer justify-content-center" id="resultFooter" style="display: none">
+        <div class="w-100">
+          <div class="text-center mb-2" style="color: var(--kiosk-muted); font-size: 0.85rem">
+            Closing in <span id="autoCloseCount">5</span>s…
+          </div>
+          <div class="kiosk-countdown-bar">
+            <div class="kiosk-countdown-bar-fill bg-primary" id="autoCloseBar" style="width: 100%"></div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary mt-2" onclick="closeCamera()"><i class="fas fa-times me-1"></i>Close Now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MANUAL ENTRY MODAL
+════════════════════════════════════════════════════════ -->
+<div class="modal fade kiosk-modal" id="manualModal" tabindex="-1" aria-labelledby="manualModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="manualModalLabel"><i class="fas fa-edit me-2"></i>Manual Attendance Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <form id="manualForm" novalidate>
+          <!-- Personnel -->
+          <div class="mb-3">
+            <label class="form-label">Personnel <span class="text-danger">*</span></label>
+            <select class="form-select" id="manualPersonnel" required>
+              <option value="">— Select Personnel —</option>
+              {% for person in personnel_list %}
+              <option
+                value="{{ person.id }}"
+                data-image="{{ url_for('static', filename=person.image_path if person.image_path else 'images/profile-placeholder.jpg') }}"
+              >
+                {{ person.rank }} {{ person.full_name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Attendance Type -->
+          <div class="mb-3">
+            <label class="form-label">Type <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3">
+              <div class="form-check form-check-inline flex-fill">
+                <input class="form-check-input" type="radio" name="manualType" id="manualTypeIn" value="TIME_IN" checked />
+                <label class="form-check-label" for="manualTypeIn"> <i class="fas fa-sign-in-alt me-1 text-success"></i>Time In </label>
+              </div>
+              <div class="form-check form-check-inline flex-fill">
+                <input class="form-check-input" type="radio" name="manualType" id="manualTypeOut" value="TIME_OUT" />
+                <label class="form-check-label" for="manualTypeOut"> <i class="fas fa-sign-out-alt me-1 text-info"></i>Time Out </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="mb-3">
+            <label class="form-label">Status <span class="text-danger">*</span></label>
+            <select class="form-select" id="manualStatus" required>
+              <option value="">— Select Status —</option>
+              <option value="PRESENT">Present</option>
+              <option value="LATE">Late</option>
+              <option value="ABSENT">Absent</option>
+              <option value="ON_LEAVE">On Leave</option>
+            </select>
+          </div>
+
+          <!-- Reason (shown for ON_LEAVE / ABSENT) -->
+          <div class="mb-3" id="manualReasonGroup" style="display: none">
+            <label class="form-label">Reason <span class="text-danger">*</span></label>
+            <select class="form-select" id="manualReason">
+              <option value="">— Select Reason —</option>
+              <optgroup label="Leave / Absence">
+                <option value="Sick Leave">Sick Leave</option>
+                <option value="Vacation Leave">Vacation Leave</option>
+                <option value="Emergency Leave">Emergency Leave</option>
+                <option value="Maternity / Paternity Leave">Maternity / Paternity Leave</option>
+                <option value="Special Privilege Leave">Special Privilege Leave</option>
+                <option value="Forced Leave">Forced Leave</option>
+              </optgroup>
+              <optgroup label="Official Business">
+                <option value="Official Business / Mission Order">Official Business / Mission Order</option>
+                <option value="Training / Seminar">Training / Seminar</option>
+                <option value="Detail to Other Unit">Detail to Other Unit</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="AWOL">AWOL (Absent Without Official Leave)</option>
+                <option value="Other">Other (specify in notes)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Selfie -->
+          <div class="mb-3">
+            <label class="form-label">Photo <span class="text-muted">(optional)</span></label>
+            <div class="d-flex gap-2 align-items-center mb-2">
+              <button type="button" class="btn btn-outline-light btn-sm" onclick="startSelfie()">
+                <i class="fas fa-camera me-1"></i>Take Selfie
+              </button>
+              <span style="color: var(--kiosk-muted); font-size: 0.8rem" id="selfieStatus">No photo taken</span>
+            </div>
+            <!-- Mini selfie preview -->
+            <div id="selfiePreviewWrapper" style="display: none">
+              <img
+                id="selfiePreview"
+                alt="Selfie preview"
+                style="width: 120px; height: 90px; object-fit: cover; border-radius: 0.5rem; border: 2px solid var(--kiosk-border)"
+              />
+              <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearSelfie()">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+            <input type="hidden" id="selfieData" name="selfie_data" />
+          </div>
+
+          <!-- Selfie camera inline -->
+          <div id="selfieCamera" style="display: none" class="mb-3">
+            <video
+              id="selfieVideo"
+              autoplay
+              playsinline
+              style="width: 100%; max-width: 320px; border-radius: 0.5rem; transform: scaleX(-1); display: block; margin: 0 auto"
+            ></video>
+            <canvas id="selfieCanvas" width="320" height="240" style="display: none"></canvas>
+            <div class="d-flex justify-content-center gap-2 mt-2">
+              <button type="button" class="btn btn-success btn-sm" onclick="captureSelfie()">
+                <i class="fas fa-camera me-1"></i>Capture
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="cancelSelfie()">
+                <i class="fas fa-times me-1"></i>Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" id="manualNotes" rows="2" placeholder="Additional remarks…"></textarea>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>Cancel</button>
+        <button type="button" class="btn btn-primary" id="manualSubmitBtn" onclick="submitManual()">
+          <i class="fas fa-save me-1"></i>Submit
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Constants & state
+  // ─────────────────────────────────────────────────────────────────────────────
+  const COUNTDOWN_SECONDS = 3; // seconds before auto-capture
+  const RESULT_DISPLAY_SEC = 5; // seconds to show result before closing
+
+  const CAPTURE_URL = '{{ url_for("api.capture_attendance_enhanced") }}';
+  const MANUAL_URL = '{{ url_for("kiosk.manual_entry") }}';
+  const RECENT_URL = '{{ url_for("kiosk.recent_json") }}';
+
+  let cameraStream = null;
+  let currentType = null; // 'TIME_IN' | 'TIME_OUT'
+  let autoCloseTimer = null;
+  let autoCloseInterval = null;
+  let cameraModalInst = null;
+  let selfieStream = null;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Camera capture flow
+  // ─────────────────────────────────────────────────────────────────────────────
+  function startCapture(type) {
+    currentType = type;
+    lockButtons(true);
+
+    const modal = document.getElementById("cameraModal");
+    cameraModalInst = bootstrap.Modal.getOrCreateInstance(modal);
+
+    // Modal header colour
+    const header = document.getElementById("cameraModalHeader");
+    header.className = "modal-header " + (type === "TIME_IN" ? "bg-success text-white" : "bg-primary text-white");
+
+    document.getElementById("cameraModalTitle").textContent =
+      type === "TIME_IN" ? "Time In — Face Recognition" : "Time Out — Face Recognition";
+
+    // Show camera view, hide result view
+    document.getElementById("cameraBody").style.display = "block";
+    document.getElementById("captureResultBody").style.display = "none";
+    document.getElementById("resultFooter").style.display = "none";
+    document.getElementById("captureProgressWrapper").style.display = "none";
+    document.getElementById("processingState").style.display = "none";
+    document.getElementById("countdownOverlay").style.display = "none";
+    setCameraStatus(
+      '<div class="d-flex align-items-center justify-content-center gap-2" style="color:var(--kiosk-muted)"><div class="kiosk-spinner" style="width:24px;height:24px;border-width:3px;"></div> Initializing camera…</div>',
+    );
+
+    cameraModalInst.show();
+    initKioskCamera();
+  }
+
+  async function initKioskCamera() {
+    const video = document.getElementById("kioskVideo");
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+      });
+      video.srcObject = cameraStream;
+      await new Promise((resolve) => video.addEventListener("loadedmetadata", resolve, { once: true }));
+      setCameraStatus("");
+      startCaptureCountdown();
+    } catch (err) {
+      setCameraStatus(
+        `<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-circle me-2"></i>${err.message || "Camera error"}</div>`,
+      );
+    }
+  }
+
+  function startCaptureCountdown() {
+    let seconds = COUNTDOWN_SECONDS;
+    const overlay = document.getElementById("countdownOverlay");
+    overlay.style.display = "block";
+    overlay.textContent = seconds;
+
+    const tick = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        clearInterval(tick);
+        overlay.style.display = "none";
+        runCapture();
+      } else {
+        overlay.textContent = seconds;
+      }
+    }, 1000);
+  }
+
+  async function runCapture() {
+    const video = document.getElementById("kioskVideo");
+    const canvas = document.getElementById("kioskCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Show processing state
+    document.getElementById("processingState").style.display = "block";
+
+    // Capture a single frame
+    ctx.drawImage(video, 0, 0, 640, 480);
+    const main_image = canvas.toDataURL("image/jpeg", 0.9);
+
+    stopCameraStream();
+
+    // Send to API
+    try {
+      const resp = await fetch(CAPTURE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify({ main_image }),
+      });
+      const data = await resp.json();
+      showCaptureResult(data);
+    } catch (err) {
+      showCaptureResult({ success: false, error: "Network error. Please try again." });
+    }
+  }
+
+  function showCaptureResult(data) {
+    // Hide camera view
+    document.getElementById("cameraBody").style.display = "none";
+
+    const resultBody = document.getElementById("captureResultBody");
+    resultBody.style.display = "block";
+
+    if (data.success) {
+      const timeLabel = data.type === "TIME_OUT" ? "Time Out" : "Time In";
+      const timeValue = data.time_out || data.time_in || "";
+      resultBody.innerHTML = `
+      <div class="capture-result success text-center">
+        <div style="font-size:3.5rem; color: #25a961; margin-bottom: 0.75rem;">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <h4 style="color: #25a961; font-weight: 800;">${data.action || "Attendance Recorded"}</h4>
+        <p style="font-size: 1.15rem; color: var(--kiosk-text); font-weight: 700; margin: 0.5rem 0 0.25rem;">
+          ${data.personnel_name || ""}
+        </p>
+        <p style="color: var(--kiosk-muted); font-size: 0.9rem; margin-bottom: 0.75rem;">
+          ${data.station || ""}
+        </p>
+        ${timeValue ? `<span class="badge bg-success fs-6 px-3 py-2">${timeLabel}: ${timeValue}</span>` : ""}
+        ${data.status ? `<span class="badge bg-secondary ms-2 fs-6 px-3 py-2">${data.status}</span>` : ""}
+      </div>
+    `;
+      // Update recent list
+      refreshRecentList();
+      updateStatusCard(true, data.personnel_name, data.action, data.status);
+    } else {
+      resultBody.innerHTML = `
+      <div class="capture-result error text-center">
+        <div style="font-size:3.5rem; color: #dc3545; margin-bottom: 0.75rem;">
+          <i class="fas fa-times-circle"></i>
+        </div>
+        <h4 style="color: #dc3545; font-weight: 800;">Recognition Failed</h4>
+        <p style="color: var(--kiosk-text); margin: 0.5rem 0 0;">
+          ${data.error || "Please try again."}
+        </p>
+      </div>
+    `;
+      updateStatusCard(false, null, data.error || "Recognition failed");
+    }
+
+    // Show auto-close footer
+    document.getElementById("resultFooter").style.display = "flex";
+    startAutoClose();
+  }
+
+  function startAutoClose() {
+    let remaining = RESULT_DISPLAY_SEC;
+    const countEl = document.getElementById("autoCloseCount");
+    const barEl = document.getElementById("autoCloseBar");
+
+    countEl.textContent = remaining;
+    barEl.style.width = "100%";
+
+    const step = 100 / (RESULT_DISPLAY_SEC * 10);
+    let width = 100;
+
+    autoCloseInterval = setInterval(() => {
+      width -= step;
+      barEl.style.width = Math.max(width, 0) + "%";
+    }, 100);
+
+    autoCloseTimer = setTimeout(() => {
+      clearInterval(autoCloseInterval);
+      closeCamera();
+    }, RESULT_DISPLAY_SEC * 1000);
+
+    // Tick counter
+    const tick = setInterval(() => {
+      remaining--;
+      if (countEl) countEl.textContent = remaining;
+      if (remaining <= 0) clearInterval(tick);
+    }, 1000);
+  }
+
+  function closeCamera() {
+    clearTimeout(autoCloseTimer);
+    clearInterval(autoCloseInterval);
+    stopCameraStream();
+    if (cameraModalInst) cameraModalInst.hide();
+    lockButtons(false);
+    currentType = null;
+  }
+
+  function stopCameraStream() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      cameraStream = null;
+    }
+    const video = document.getElementById("kioskVideo");
+    if (video) video.srcObject = null;
+  }
+
+  function setCameraStatus(html) {
+    document.getElementById("cameraStatus").innerHTML = html;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Status card (left panel)
+  // ─────────────────────────────────────────────────────────────────────────────
+  function updateStatusCard(success, name, message, status) {
+    const card = document.getElementById("statusCard");
+    const header = document.getElementById("statusCardHeader");
+    const body = document.getElementById("statusCardBody");
+
+    card.style.display = "block";
+
+    if (success) {
+      header.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>Attendance Recorded';
+      body.innerHTML = `
+      <p class="mb-1" style="font-weight:700; font-size:1rem;">${name || ""}</p>
+      <p class="mb-1" style="color:var(--kiosk-muted); font-size:0.85rem;">${message || ""}</p>
+      ${status ? `<span class="badge bg-success">${status}</span>` : ""}
+    `;
+    } else {
+      header.innerHTML = '<i class="fas fa-exclamation-circle text-danger me-2"></i>Error';
+      body.innerHTML = `<p style="color: var(--kiosk-muted); font-size:0.9rem;">${message}</p>`;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Recent list refresh
+  // ─────────────────────────────────────────────────────────────────────────────
+  async function refreshRecentList() {
+    try {
+      const resp = await fetch(RECENT_URL);
+      const data = await resp.json();
+      renderRecentList(data.records);
+    } catch (_) {
+      /* silent */
+    }
+  }
+
+  function renderRecentList(records) {
+    const list = document.getElementById("recentList");
+    const countEl = document.getElementById("recentCount");
+    if (!list || !records) return;
+
+    if (records.length === 0) {
+      list.innerHTML = `
+      <div class="text-center py-5">
+        <i class="fas fa-inbox fa-3x mb-3" style="color: var(--kiosk-muted);"></i>
+        <p style="color: var(--kiosk-muted);">No attendance recorded today yet.</p>
+      </div>`;
+      if (countEl) countEl.textContent = "0";
+      return;
+    }
+
+    if (countEl) countEl.textContent = records.length;
+
+    list.innerHTML = records
+      .map((r) => {
+        const timeBadge = r.time_out
+          ? `<span class="badge bg-info text-dark badge-time d-block mb-1">OUT ${r.time_out}</span>`
+          : r.time_in
+            ? `<span class="badge bg-success badge-time d-block mb-1">IN ${r.time_in}</span>`
+            : "";
+
+        const statusMap = {
+          PRESENT: '<span class="badge bg-success">Present</span>',
+          LATE: '<span class="badge bg-warning text-dark">Late</span>',
+          ABSENT: '<span class="badge bg-danger">Absent</span>',
+          ON_LEAVE: '<span class="badge bg-secondary">On Leave</span>',
+        };
+        const statusBadge = statusMap[r.status] || "";
+
+        return `
+      <div class="recent-item">
+        <img src="${r.image_url}" alt="${r.full_name}" class="avatar" />
+        <div class="info">
+          <div class="name">${r.full_name}</div>
+          <div class="meta">${r.station}</div>
+        </div>
+        <div class="text-end flex-shrink-0">
+          ${timeBadge}
+          ${statusBadge}
+        </div>
+      </div>`;
+      })
+      .join("");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Manual entry
+  // ─────────────────────────────────────────────────────────────────────────────
+  function openManualModal() {
+    document.getElementById("manualForm").reset();
+    document.getElementById("manualReasonGroup").style.display = "none";
+    document.getElementById("selfiePreviewWrapper").style.display = "none";
+    document.getElementById("selfieStatus").textContent = "No photo taken";
+    document.getElementById("selfieData").value = "";
+    document.getElementById("selfieCamera").style.display = "none";
+    cancelSelfieStream();
+
+    const modal = new bootstrap.Modal(document.getElementById("manualModal"));
+    modal.show();
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const statusSel = document.getElementById("manualStatus");
+    if (statusSel) {
+      statusSel.addEventListener("change", function () {
+        const show = ["ON_LEAVE", "ABSENT"].includes(this.value);
+        document.getElementById("manualReasonGroup").style.display = show ? "block" : "none";
+      });
+    }
+
+    // Cleanup camera when modal hides
+    document.getElementById("cameraModal").addEventListener("hidden.bs.modal", function () {
+      stopCameraStream();
+      lockButtons(false);
+      currentType = null;
+    });
+
+    document.getElementById("manualModal").addEventListener("hidden.bs.modal", function () {
+      cancelSelfieStream();
+    });
+  });
+
+  async function submitManual() {
+    const personnelId = document.getElementById("manualPersonnel").value;
+    const type = document.querySelector('input[name="manualType"]:checked')?.value;
+    const status = document.getElementById("manualStatus").value;
+    const reason = document.getElementById("manualReason")?.value || "";
+    const notes = document.getElementById("manualNotes").value;
+    const selfieData = document.getElementById("selfieData").value;
+
+    if (!personnelId || !type || !status) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    const show = ["ON_LEAVE", "ABSENT"].includes(status);
+    if (show && !reason) {
+      alert("Please select a reason for this status.");
+      return;
+    }
+
+    const btn = document.getElementById("manualSubmitBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Submitting…';
+
+    try {
+      const resp = await fetch(MANUAL_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify({
+          personnel_id: personnelId,
+          attendance_type: type,
+          status,
+          reason,
+          notes,
+          selfie_data: selfieData || null,
+        }),
+      });
+      const data = await resp.json();
+
+      bootstrap.Modal.getInstance(document.getElementById("manualModal"))?.hide();
+
+      if (data.success) {
+        updateStatusCard(true, data.personnel_name, "Manual entry recorded.", data.status);
+        document.getElementById("statusCard").style.display = "block";
+        refreshRecentList();
+      } else {
+        alert("Error: " + (data.error || "Submission failed."));
+      }
+    } catch (err) {
+      alert("Network error. Please try again.");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-save me-1"></i>Submit';
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Selfie helpers
+  // ─────────────────────────────────────────────────────────────────────────────
+  async function startSelfie() {
+    try {
+      selfieStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, facingMode: "user" },
+      });
+      const video = document.getElementById("selfieVideo");
+      video.srcObject = selfieStream;
+      document.getElementById("selfieCamera").style.display = "block";
+    } catch (err) {
+      alert("Camera error: " + (err.message || "Cannot open camera."));
+    }
+  }
+
+  function captureSelfie() {
+    const video = document.getElementById("selfieVideo");
+    const canvas = document.getElementById("selfieCanvas");
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, 320, 240);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+    document.getElementById("selfieData").value = dataUrl;
+    document.getElementById("selfiePreview").src = dataUrl;
+    document.getElementById("selfiePreviewWrapper").style.display = "block";
+    document.getElementById("selfieStatus").textContent = "Photo taken ✓";
+
+    cancelSelfieStream();
+    document.getElementById("selfieCamera").style.display = "none";
+  }
+
+  function clearSelfie() {
+    document.getElementById("selfieData").value = "";
+    document.getElementById("selfiePreviewWrapper").style.display = "none";
+    document.getElementById("selfieStatus").textContent = "No photo taken";
+  }
+
+  function cancelSelfie() {
+    cancelSelfieStream();
+    document.getElementById("selfieCamera").style.display = "none";
+  }
+
+  function cancelSelfieStream() {
+    if (selfieStream) {
+      selfieStream.getTracks().forEach((t) => t.stop());
+      selfieStream = null;
+    }
+    const v = document.getElementById("selfieVideo");
+    if (v) v.srcObject = null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Button lock helpers & sleep
+  // ─────────────────────────────────────────────────────────────────────────────
+  function lockButtons(locked) {
+    ["btnTimeIn", "btnTimeOut", "btnManual"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = locked;
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+</script>
+{% endblock %}

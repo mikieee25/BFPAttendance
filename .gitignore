@@ -1,48 +1,71 @@
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
 
-# Logs
-logs/
-*.log
-*.log.*
+# ─── Virtual environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# Dependency directories
-jspm_packages/
-bower_components/
-
-# Build directories
-dist/
-build/
-out/
-target/
-
-# Environment variables
+# ─── Environment / secrets ────────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
-.env.development
-.env.test
-.env.production
-.venv
+# keep the example file
+!.env.example
 
-# IDEs and editors
+# ─── Python version pinning ───────────────────────────────────────────────────
+.python-version
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+*.coverage.*
+nosetests.xml
+test-report/
+
+# ─── Build / distribution ─────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+.eggs/
+
+# ─── Type checker / linter caches ─────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+
+# ─── IDEs & editors ───────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
 *.sublime-workspace
 *.sublime-project
-*.iml
-.project
-.classpath
-.settings/
-.history/
 *.code-workspace
+.history/
 
-# OS generated files
+# ─── OS generated ─────────────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -50,78 +73,32 @@ target/
 .Trashes
 ehthumbs.db
 Thumbs.db
-*.bak
-*.tmp
 
-# Testing
-coverage/
-.nyc_output/
-*.lcov
-.coverage
-htmlcov/
-.tox/
-.pytest_cache/
-jest-report/
-test-report/
-
-# Temporary files
-*.tmp
-*.temp
-*.pid
-*.seed
-*.pid.lock
-tmp/
-temp/
-
-# Package managers
-.pnpm-debug.log*
-yarn.lock
-package-lock.json
-.npm/
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-
-# CI/CD
-.ci/
-*.log
-*.cache
-.vercel
-.netlify
-.firebase/
-
-# Compiled output
-*.compiled
-*.min.*
-*.bundle.*
-
-# Mobile development
-.gradle/
-local.properties
-*.apk
-*.aab
-*.ipa
-
-# Database
+# ─── Database dumps & backups ─────────────────────────────────────────────────
+*.sql
 *.sqlite
 *.sqlite3
 *.db
-manage/backups/*.sql
+manage/backups/
 
-# Runtime-generated face capture artifacts
-static/images/attendance_temp/*.jpg
-static/images/attendance_temp/*.jpeg
-static/images/attendance_temp/*.png
+# ─── Runtime-generated media ──────────────────────────────────────────────────
+# Face recognition training images (per-user biometric data)
+static/images/face_data/
 
-# Miscellaneous
+# Temporary attendance capture images
+static/images/attendance_temp/
+
+# ─── Flask session / instance ─────────────────────────────────────────────────
+instance/
+flask_session/
+
+# ─── Misc temp files ──────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
 *.orig
 *.rej
 *.patch
-*.diff
-.sass-cache/
-.eslintcache
-.stylelintcache
-.cache/
-.parcel-cache/
-.python-version
-__pycache__
+*.pid
+tmp/
+temp/

@@ -30,7 +30,6 @@ from face_rec_module.face_service import (
     recognize_face,
     load_face_database,
     process_attendance,
-    to_native_types,
 )
 
 # Set up logger
@@ -125,8 +124,8 @@ def capture():
 def api_capture():
     """API endpoint for processing face recognition attendance capture.
 
-    Processes base64 image data, performs face recognition with liveness detection,
-    and records attendance if person is identified and passes liveness check.
+    Processes base64 image data, performs face recognition,
+    and records attendance if the person is identified.
 
     Returns JSON response with success status and attendance details.
     """
@@ -137,39 +136,8 @@ def api_capture():
         if not image_data:
             return jsonify({"success": False, "error": "No image provided"}), 400
 
-        # Process the image and extract face with liveness detection
-        face_embedding, face_metadata, temp_path = process_base64_image(
-            image_data, enable_liveness=True
-        )
-
-        # Log detailed liveness results
-        if face_metadata:
-            liveness_failed = face_metadata.get("liveness_failed", False)
-            liveness_details = face_metadata.get("liveness_details", {})
-            logger.info(
-                f"Attendance capture - Liveness check: {'FAILED' if liveness_failed else 'PASSED'}"
-            )
-            logger.info(f"  Liveness details: {liveness_details}")
-
-        # Check if liveness detection failed
-        if face_metadata and face_metadata.get("liveness_failed"):
-            liveness_details = to_native_types(
-                face_metadata.get("liveness_details", {})
-            )
-            logger.warning(
-                "❌ LIVENESS DETECTION FAILED - Possible spoofing attempt detected!"
-            )
-            logger.warning(f"Liveness details: {liveness_details}")
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Liveness detection failed. Please use a live camera feed, not a photo or video.",
-                        "liveness_details": liveness_details,
-                    }
-                ),
-                400,
-            )
+        # Process the image and extract face
+        face_embedding, face_metadata, temp_path = process_base64_image(image_data)
 
         if face_embedding is None:
             return (
@@ -236,7 +204,7 @@ def api_capture():
             activity = ActivityLog(
                 user_id=current_user.id,
                 title="Attendance Captured",
-                description=f"Attendance captured for {personnel.full_name} via face recognition (liveness verified)",
+                description=f"Attendance captured for {personnel.full_name} via face recognition",
             )
             db.session.add(activity)
             db.session.commit()

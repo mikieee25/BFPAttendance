@@ -68,7 +68,8 @@
               <option value="">All Statuses</option>
               {% for status_option in attendance_statuses %}
               <option value="{{ status_option.value }}" {{ 'selected' if selected_status == status_option.value else '' }}>
-                {{ status_option.value.title() }}
+                {% if status_option.value == 'ON_LEAVE' %}On Leave
+                {% else %}{{ status_option.value.title() }}{% endif %}
               </option>
               {% endfor %}
             </select>
@@ -102,13 +103,14 @@
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Personnel</th>
-                <th>Station</th>
-                <th>Time In</th>
-                <th>Time Out</th>
-                <th>Status</th>
-                <th>Total Hours</th>
-                <th>Actions</th>
+                      <th>Personnel</th>
+                      <th>Station</th>
+                      <th>Schedule</th>
+                      <th>Time In</th>
+                      <th>Time Out</th>
+                      <th>Status</th>
+                      <th>Total Hours</th>
+                      <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -131,6 +133,13 @@
                 </td>
                 <td>{{ record.personnel.station.station_name }}</td>
                 <td>
+                  {% if record.personnel.is_shifting %}
+                  <span class="badge bg-info text-dark"><i class="fas fa-sync-alt me-1"></i>Shifting</span>
+                  {% else %}
+                  <span class="badge bg-secondary"><i class="fas fa-calendar me-1"></i>Regular</span>
+                  {% endif %}
+                </td>
+                <td>
                   {% if record.time_in %}
                   {{ record.time_in.strftime('%H:%M:%S') }}
                   {% else %}
@@ -145,14 +154,16 @@
                   {% endif %}
                 </td>
                 <td>
-                  {% if record.status.value == 'present' %}
+                  {% if record.status.value == 'PRESENT' %}
                   <span class="badge bg-success">Present</span>
-                  {% elif record.status.value == 'late' %}
-                  <span class="badge bg-warning">Late</span>
-                  {% elif record.status.value == 'absent' %}
+                  {% elif record.status.value == 'LATE' %}
+                  <span class="badge bg-warning text-dark">Late</span>
+                  {% elif record.status.value == 'ABSENT' %}
                   <span class="badge bg-danger">Absent</span>
+                  {% elif record.status.value == 'ON_LEAVE' %}
+                  <span class="badge bg-secondary">On Leave</span>
                   {% else %}
-                  <span class="badge bg-secondary">{{ record.status.value.title() }}</span>
+                  <span class="badge bg-light text-dark">{{ record.status.value.title() }}</span>
                   {% endif %}
                 </td>
                 <td>
@@ -222,7 +233,7 @@
       responsive: true,
       pageLength: 25,
       order: [[0, "desc"]],
-      columnDefs: [{ orderable: false, targets: [7] }],
+      columnDefs: [{ orderable: false, targets: [8] }],
       language: {
         search: "Search:",
         lengthMenu: "Show _MENU_ entries",

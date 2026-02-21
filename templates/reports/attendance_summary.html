@@ -6,14 +6,20 @@
   <div class="col-12">
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1 class="page-title">
-        <i class="fas fa-chart-bar me-2"></i>Attendance Summary Report
+        <i class="fas fa-table me-2"></i>Attendance Summary Report
       </h1>
       <div>
         <a href="{{ url_for('reports.index') }}" class="btn btn-secondary me-2">
           <i class="fas fa-arrow-left me-2"></i>Back to Reports
         </a>
-        <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date, station_id=selected_station, format='xlsx') }}" class="btn btn-success">
+        <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date, station_id=selected_station, format='xlsx') }}" class="btn btn-success me-2">
           <i class="fas fa-file-excel me-2"></i>Export Excel
+        </a>
+        <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date, station_id=selected_station, format='csv') }}" class="btn btn-info me-2">
+          <i class="fas fa-file-csv me-2"></i>Export CSV
+        </a>
+        <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date, station_id=selected_station, format='pdf') }}" class="btn btn-danger">
+          <i class="fas fa-file-pdf me-2"></i>Export PDF
         </a>
       </div>
     </div>
@@ -33,13 +39,11 @@
         <form method="GET" class="row align-items-end">
           <div class="col-md-3">
             <label for="start_date" class="form-label">Start Date:</label>
-            <input type="date" class="form-control" id="start_date" name="start_date" 
-                   value="{{ start_date }}" required>
+            <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}" required>
           </div>
           <div class="col-md-3">
             <label for="end_date" class="form-label">End Date:</label>
-            <input type="date" class="form-control" id="end_date" name="end_date" 
-                   value="{{ end_date }}" required>
+            <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}" required>
           </div>
           {% if current_user.is_admin %}
           <div class="col-md-3">
@@ -47,8 +51,7 @@
             <select class="form-select" id="station_id" name="station_id">
               <option value="">All Stations</option>
               {% for station in stations %}
-              <option value="{{ station.id }}" 
-                      {{ 'selected' if selected_station == station.id else '' }}>
+              <option value="{{ station.id }}" {{ 'selected' if selected_station == station.id else '' }}>
                 {{ station.station_name }}
               </option>
               {% endfor %}
@@ -66,101 +69,78 @@
   </div>
 </div>
 
-<!-- Summary Statistics -->
+<!-- Summary Cards -->
 <div class="row mb-4">
-  <div class="col-lg-3 col-md-6 mb-4">
+  <div class="col-lg-4 col-md-6 mb-4">
     <div class="card border-left-primary shadow h-100 py-2">
       <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-              Total Personnel
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ total_personnel }}
-            </div>
-          </div>
-          <div class="col-auto">
-            <i class="fas fa-users fa-2x text-gray-300"></i>
-          </div>
-        </div>
+        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Personnel</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_personnel }}</div>
       </div>
     </div>
   </div>
-
-  <div class="col-lg-3 col-md-6 mb-4">
+  <div class="col-lg-4 col-md-6 mb-4">
     <div class="card border-left-success shadow h-100 py-2">
       <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-              Present Days
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ present_count }}
-            </div>
-          </div>
-          <div class="col-auto">
-            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-          </div>
-        </div>
+        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Present Days</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ present_count }}</div>
       </div>
     </div>
   </div>
-
-  <div class="col-lg-3 col-md-6 mb-4">
+  <div class="col-lg-4 col-md-6 mb-4">
     <div class="card border-left-warning shadow h-100 py-2">
       <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-              Late Days
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ late_count }}
-            </div>
-          </div>
-          <div class="col-auto">
-            <i class="fas fa-clock fa-2x text-gray-300"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-3 col-md-6 mb-4">
-    <div class="card border-left-danger shadow h-100 py-2">
-      <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-              Attendance Rate
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ "%.1f"|format(attendance_rate) }}%
-            </div>
-          </div>
-          <div class="col-auto">
-            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
-          </div>
-        </div>
+        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Late Days</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ late_count }}</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Daily Attendance Chart -->
+<!-- Daily Summary Table -->
 <div class="row mb-4">
   <div class="col-12">
     <div class="card shadow">
-      <div class="card-header py-3">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-chart-area me-2"></i>Daily Attendance Trends
+          <i class="fas fa-calendar-day me-2"></i>Daily Attendance Summary
         </h6>
+        <small class="text-muted">
+          <i class="fas fa-info-circle me-1"></i>Click a row to see who was present, absent, or on shift that day
+        </small>
       </div>
       <div class="card-body">
-        <div class="chart-container">
-          <canvas id="dailyAttendanceChart"></canvas>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover" id="dailySummaryTable" width="100%" cellspacing="0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Present</th>
+                <th>Late</th>
+                <th>On Leave</th>
+                <th>Absent</th>
+                <th>Shifting On Duty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for date, data in daily_summary.items() %}
+              <tr class="daily-row clickable-row" style="cursor:pointer;"
+                  data-date="{{ date }}"
+                  data-station="{{ selected_station or '' }}"
+                  title="Click to see attendance details for {{ date }}">
+                <td class="fw-bold text-primary">
+                  <i class="fas fa-search me-1 text-muted" style="font-size:0.75rem;"></i>
+                  {{ date }}
+                </td>
+                <td><span class="badge bg-success">{{ data.present }}</span></td>
+                <td><span class="badge bg-warning text-dark">{{ data.late }}</span></td>
+                <td><span class="badge bg-secondary">{{ data.on_leave }}</span></td>
+                <td><span class="badge bg-danger">{{ data.absent }}</span></td>
+                <td><span class="badge bg-info text-dark">{{ data.shifting_on_duty }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -181,13 +161,13 @@
           <table class="table table-bordered" id="personnelSummaryTable" width="100%" cellspacing="0">
             <thead>
               <tr>
-                <th>Rank & Name</th>
+                <th>Rank &amp; Name</th>
                 <th>Station</th>
+                <th>Schedule</th>
                 <th>Present Days</th>
                 <th>Late Days</th>
+                <th>On Leave Days</th>
                 <th>Absent Days</th>
-                <th>Attendance Rate</th>
-                <th>Performance</th>
               </tr>
             </thead>
             <tbody>
@@ -199,37 +179,20 @@
                 </td>
                 <td>{{ summary.personnel.station.station_name }}</td>
                 <td>
-                  <span class="badge bg-success">{{ summary.present_days }}</span>
-                </td>
-                <td>
-                  <span class="badge bg-warning">{{ summary.late_days }}</span>
-                </td>
-                <td>
-                  <span class="badge bg-danger">{{ summary.absent_days }}</span>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <span class="me-2">{{ "%.1f"|format(summary.attendance_rate) }}%</span>
-                    <div class="progress flex-grow-1" style="height: 8px;">
-                      <div class="progress-bar 
-                        {% if summary.attendance_rate >= 95 %}bg-success
-                        {% elif summary.attendance_rate >= 85 %}bg-warning
-                        {% else %}bg-danger{% endif %}" 
-                        style="width: {{ summary.attendance_rate }}%"></div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  {% if summary.attendance_rate >= 95 %}
-                    <span class="badge bg-success">Excellent</span>
-                  {% elif summary.attendance_rate >= 85 %}
-                    <span class="badge bg-warning">Good</span>
-                  {% elif summary.attendance_rate >= 75 %}
-                    <span class="badge bg-primary">Fair</span>
+                  {% if summary.personnel.is_shifting %}
+                  <span class="badge bg-info text-dark">
+                    <i class="fas fa-sync-alt me-1"></i>Shifting
+                  </span>
                   {% else %}
-                    <span class="badge bg-danger">Poor</span>
+                  <span class="badge bg-secondary">
+                    <i class="fas fa-calendar me-1"></i>Regular
+                  </span>
                   {% endif %}
                 </td>
+                <td>{{ summary.present_days }}</td>
+                <td>{{ summary.late_days }}</td>
+                <td>{{ summary.on_leave_days }}</td>
+                <td>{{ summary.absent_days }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -240,7 +203,7 @@
   </div>
 </div>
 
-<!-- Report Period Info -->
+<!-- Report Period Summary -->
 <div class="row">
   <div class="col-12">
     <div class="card shadow">
@@ -252,11 +215,35 @@
             <p class="mb-0 text-muted">Total Days: {{ total_days }}</p>
           </div>
           <div class="col-md-6">
-            <h6 class="font-weight-bold">Overall Performance:</h6>
-            <p class="mb-0">Attendance Rate: {{ "%.1f"|format(attendance_rate) }}%</p>
-            <p class="mb-0 text-muted">Punctuality Rate: {{ "%.1f"|format(punctuality_rate) }}%</p>
+            <h6 class="font-weight-bold">Summary:</h6>
+            <p class="mb-0">Total Present Records: {{ present_count }}</p>
+            <p class="mb-0 text-muted">Total Late Records: {{ late_count }}</p>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Day Detail Modal -->
+<div class="modal fade" id="dayDetailModal" tabindex="-1" aria-labelledby="dayDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="dayDetailModalLabel">
+          <i class="fas fa-calendar-day me-2"></i>
+          Attendance Details — <span id="modalDateLabel"></span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="dayDetailModalBody">
+        <div class="text-center py-4">
+          <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+          <p class="mt-2 text-muted">Loading…</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -264,87 +251,122 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='vendor/chartjs/chart.min.js') }}"></script>
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    $('#personnelSummaryTable').DataTable({
-        responsive: true,
-        order: [[5, 'desc']], // Sort by attendance rate
-        pageLength: 25,
-        columnDefs: [
-            { orderable: false, targets: [6] } // Disable sorting for performance column
-        ]
+$(document).ready(function () {
+  $('#dailySummaryTable').DataTable({
+    responsive: true,
+    order: [[0, 'desc']],
+    pageLength: 15,
+    columnDefs: [{ orderable: false, targets: [] }]
+  });
+
+  $('#personnelSummaryTable').DataTable({
+    responsive: true,
+    order: [[3, 'desc']],
+    pageLength: 25
+  });
+
+  // Clickable daily rows — open detail modal
+  $(document).on('click', '.daily-row', function () {
+    const date      = $(this).data('date');
+    const stationId = $(this).data('station');
+
+    $('#modalDateLabel').text(date);
+    $('#dayDetailModalBody').html(
+      '<div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="mt-2 text-muted">Loading…</p></div>'
+    );
+
+    const modal = new bootstrap.Modal(document.getElementById('dayDetailModal'));
+    modal.show();
+
+    let url = `/reports/api/day-detail?date=${date}`;
+    if (stationId) url += `&station_id=${stationId}`;
+
+    fetch(url, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(r => r.json())
+      .then(data => renderDayDetail(data, date))
+      .catch(() => {
+        $('#dayDetailModalBody').html(
+          '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>Failed to load details.</div>'
+        );
+      });
+  });
+});
+
+function statusBadge(status) {
+  const map = {
+    'PRESENT':  '<span class="badge bg-success">Present</span>',
+    'LATE':     '<span class="badge bg-warning text-dark">Late</span>',
+    'ABSENT':   '<span class="badge bg-danger">Absent</span>',
+    'ON_LEAVE': '<span class="badge bg-secondary">On Leave</span>',
+  };
+  return map[status] || `<span class="badge bg-light text-dark">${status}</span>`;
+}
+
+function scheduleBadge(isShifting) {
+  return isShifting
+    ? '<span class="badge bg-info text-dark"><i class="fas fa-sync-alt me-1"></i>Shifting</span>'
+    : '<span class="badge bg-secondary"><i class="fas fa-calendar me-1"></i>Regular</span>';
+}
+
+function renderDayDetail(data, date) {
+  const groups = [
+    { key: 'present',  label: 'Present',  icon: 'fas fa-check-circle text-success',  items: data.present  },
+    { key: 'late',     label: 'Late',     icon: 'fas fa-clock text-warning',          items: data.late     },
+    { key: 'on_leave', label: 'On Leave', icon: 'fas fa-calendar-minus text-secondary', items: data.on_leave },
+    { key: 'absent',   label: 'Absent',   icon: 'fas fa-times-circle text-danger',    items: data.absent   },
+    { key: 'shifting_off', label: 'Shifting (Off Duty)', icon: 'fas fa-moon text-info', items: data.shifting_off },
+  ];
+
+  let html = '';
+
+  groups.forEach(g => {
+    if (!g.items || g.items.length === 0) return;
+
+    html += `
+      <div class="mb-4">
+        <h6 class="fw-bold mb-2">
+          <i class="${g.icon} me-2"></i>${g.label}
+          <span class="badge bg-light text-dark ms-1">${g.items.length}</span>
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Rank &amp; Name</th>
+                <th>Station</th>
+                <th>Schedule</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+
+    g.items.forEach(p => {
+      html += `
+        <tr>
+          <td><span class="text-muted small">${p.rank}</span> ${p.full_name}</td>
+          <td>${p.station}</td>
+          <td>${scheduleBadge(p.is_shifting)}</td>
+          <td>${p.time_in || '<span class="text-muted">—</span>'}</td>
+          <td>${p.time_out || '<span class="text-muted">—</span>'}</td>
+          <td>${statusBadge(p.status || 'ABSENT')}</td>
+        </tr>
+      `;
     });
 
-    // Daily Attendance Chart
-    const dailyData = {
-        labels: [
-            {% for date, data in daily_summary.items() %}
-            '{{ date.strftime("%m/%d") }}',
-            {% endfor %}
-        ],
-        datasets: [{
-            label: 'Present',
-            data: [
-                {% for date, data in daily_summary.items() %}
-                {{ data.present }},
-                {% endfor %}
-            ],
-            backgroundColor: 'rgba(40, 167, 69, 0.8)',
-            borderColor: 'rgba(40, 167, 69, 1)',
-            borderWidth: 1
-        }, {
-            label: 'Late',
-            data: [
-                {% for date, data in daily_summary.items() %}
-                {{ data.late }},
-                {% endfor %}
-            ],
-            backgroundColor: 'rgba(255, 193, 7, 0.8)',
-            borderColor: 'rgba(255, 193, 7, 1)',
-            borderWidth: 1
-        }, {
-            label: 'Absent',
-            data: [
-                {% for date, data in daily_summary.items() %}
-                {{ data.absent }},
-                {% endfor %}
-            ],
-            backgroundColor: 'rgba(220, 53, 69, 0.8)',
-            borderColor: 'rgba(220, 53, 69, 1)',
-            borderWidth: 1
-        }]
-    };
+    html += `</tbody></table></div></div>`;
+  });
 
-    const dailyConfig = {
-        type: 'line',
-        data: dailyData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Daily Attendance Overview'
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
-                    }
-                }
-            }
-        }
-    };
+  if (!html) {
+    html = '<div class="text-center py-4 text-muted"><i class="fas fa-inbox fa-2x mb-2"></i><p>No records for this day.</p></div>';
+  }
 
-    new Chart(document.getElementById('dailyAttendanceChart'), dailyConfig);
-});
+  $('#dayDetailModalBody').html(html);
+}
 </script>
 {% endblock %}

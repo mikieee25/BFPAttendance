@@ -26,6 +26,7 @@ class AttendanceStatus(Enum):
     PRESENT = "PRESENT"
     LATE = "LATE"
     ABSENT = "ABSENT"
+    ON_LEAVE = "ON_LEAVE"
 
 
 class User(UserMixin, db.Model):
@@ -49,6 +50,9 @@ class User(UserMixin, db.Model):
     is_active = db.Column(
         db.Boolean, default=True, nullable=False
     )  # Inactive users cannot log in
+    is_kiosk = db.Column(
+        db.Boolean, default=False, nullable=False
+    )  # Kiosk-only accounts redirect to attendance kiosk view
     must_change_password = db.Column(
         db.Boolean, default=False
     )  # Force password change on next login
