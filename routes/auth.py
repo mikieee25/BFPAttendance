@@ -128,6 +128,9 @@ def login():
             next_page = request.args.get("next")
             if next_page and _is_safe_redirect_url(next_page):
                 return redirect(next_page)
+            # Kiosk accounts go directly to the kiosk view
+            if getattr(user, "is_kiosk", False):
+                return redirect(url_for("kiosk.index"))
             return redirect(url_for("dashboard.index"))
         else:
             flash("Invalid username/email or password", "error")
@@ -181,6 +184,7 @@ def register():
         confirm_password = request.form["confirm_password"]
         station_type = request.form["station_type"]
         is_admin = bool(request.form.get("is_admin"))
+        is_kiosk = bool(request.form.get("is_kiosk"))
 
         # Validation
         if password != confirm_password:
@@ -217,6 +221,7 @@ def register():
             password=generate_password_hash(password),
             station_type=StationType(station_type),
             is_admin=is_admin,
+            is_kiosk=is_kiosk,
         )
 
         db.session.add(new_user)
@@ -578,6 +583,70 @@ def get_user_edit(user_id):
     """
 
     return jsonify({"success": True, "html": edit_html})
+
+
+@auth_bp.route("/create-kiosk", methods=["POST"])
+@login_required
+@admin_required(api=True)
+def create_kiosk():
+    """Create a new kiosk account (admin only).
+
+    Kiosk accounts are restricted to the attendance kiosk view only.
+    They cannot access any other part of the system.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        username = (data.get("username") or "").strip()
+        email = (data.get("email") or "").strip()
+        station_type_str = (data.get("station_type") or "").strip()
+        password = data.get("password") or ""
+        confirm_password = data.get("confirm_password") or ""
+
+        # Validation
+        if not all([username, email, station_type_str, password, confirm_password]):
+            return jsonify({"success": False, "error": "All fields are required"}), 400
+
+        if password != confirm_password:
+            return jsonify({"success": False, "error": "Passwords do not match"}), 400
+
+        if User.query.filter_by(username=username).first():
+            return jsonify({"success": False, "error": "Username already exists"}), 409
+
+        if User.query.filter_by(email=email).first():
+            return jsonify({"success": False, "error": "Email already exists"}), 409
+
+        try:
+            station_type = StationType(station_type_str)
+        except ValueError:
+            return jsonify({"success": False, "error": f"Invalid station type: {station_type_str}"}), 400
+
+        new_kiosk = User(
+            username=username,
+            email=email,
+            password=generate_password_hash(password),
+            station_type=station_type,
+            is_admin=False,
+            is_kiosk=True,
+            is_active=True,
+        )
+        db.session.add(new_kiosk)
+
+        activity = ActivityLog(
+            user_id=current_user.id,
+            title="Kiosk Account Created",
+            description=f"Kiosk account '{username}' created by {current_user.username} for {station_type.value}",
+        )
+        db.session.add(activity)
+        db.session.commit()
+
+        return jsonify({"success": True, "message": f"Kiosk account '{username}' created successfully"})
+
+    except Exception as e:
+        db.session.rollback()
+        return handle_api_exception(e)
 
 
 @auth_bp.route("/user/<int:user_id>/delete", methods=["DELETE"])

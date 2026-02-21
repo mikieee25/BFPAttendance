@@ -1,12 +1,8 @@
-{% extends "base.html" %} {% block title %}Manual Attendance Entry{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}Manual Attendance Entry{% endblock %} {% block content %}
 <div class="container-fluid">
   <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800">Manual Attendance Entry</h1>
-    <a
-      href="{{ url_for('attendance.index') }}"
-      class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm"
-    >
+    <a href="{{ url_for('attendance.index') }}" class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm">
       <i class="fas fa-arrow-left fa-sm text-white-50"></i> Back to Attendance
     </a>
   </div>
@@ -15,114 +11,93 @@
     <div class="col-lg-8 mx-auto">
       <div class="card shadow mb-4">
         <div class="card-header py-3">
-          <h6 class="m-0 font-weight-bold text-primary">
-            Add Attendance Record
-          </h6>
+          <h6 class="m-0 font-weight-bold text-primary">Add Attendance Record</h6>
         </div>
         <div class="card-body">
           <form method="POST" action="{{ url_for('attendance.manual') }}">
             <div class="form-group">
-              <label for="personnel_id"
-                >Personnel <span class="text-danger">*</span></label
-              >
-              <select
-                class="form-control"
-                id="personnel_id"
-                name="personnel_id"
-                required
-              >
+              <label for="personnel_id">Personnel <span class="text-danger">*</span></label>
+              <select class="form-control" id="personnel_id" name="personnel_id" required>
                 <option value="">Select Personnel</option>
                 {% for person in personnel_list %}
-                <option value="{{ person.id }}">
-                  {{ person.full_name }} - {{ person.rank }}
-                </option>
+                <option value="{{ person.id }}">{{ person.full_name }} - {{ person.rank }}</option>
                 {% endfor %}
               </select>
             </div>
 
             <div class="form-group">
               <label for="date">Date <span class="text-danger">*</span></label>
-              <input
-                type="date"
-                class="form-control"
-                id="date"
-                name="date"
-                value="{{ today }}"
-                max="{{ today }}"
-                required
-              />
+              <input type="date" class="form-control" id="date" name="date" value="{{ today }}" max="{{ today }}" required />
             </div>
 
             <div class="row">
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="time_in">Time In</label>
-                  <input
-                    type="time"
-                    class="form-control"
-                    id="time_in"
-                    name="time_in"
-                  />
-                  <small class="form-text text-muted"
-                    >Leave empty if not applicable</small
-                  >
+                  <input type="time" class="form-control" id="time_in" name="time_in" />
+                  <small class="form-text text-muted">Leave empty if not applicable</small>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="time_out">Time Out</label>
-                  <input
-                    type="time"
-                    class="form-control"
-                    id="time_out"
-                    name="time_out"
-                  />
-                  <small class="form-text text-muted"
-                    >Leave empty if not applicable</small
-                  >
+                  <input type="time" class="form-control" id="time_out" name="time_out" />
+                  <small class="form-text text-muted">Leave empty if not applicable</small>
                 </div>
               </div>
             </div>
 
             <div class="form-group">
-              <label for="status"
-                >Attendance Status <span class="text-danger">*</span></label
-              >
+              <label for="status">Attendance Status <span class="text-danger">*</span></label>
               <select class="form-control" id="status" name="status" required>
                 <option value="">Select Status</option>
                 {% for status in attendance_statuses %}
-                <option value="{{ status.value }}">{{ status.value }}</option>
+                <option value="{{ status.value }}">
+                  {% if status.value == 'PRESENT' %}Present {% elif status.value == 'LATE' %}Late {% elif status.value == 'ABSENT' %}Absent
+                  {% elif status.value == 'ON_LEAVE' %}On Leave {% else %}{{ status.value }}{% endif %}
+                </option>
                 {% endfor %}
+              </select>
+            </div>
+
+            <!-- Reason — shown when status is ON_LEAVE or ABSENT -->
+            <div class="form-group" id="reasonGroup" style="display: none">
+              <label for="reason">Reason <span class="text-danger">*</span></label>
+              <select class="form-control" id="reason" name="reason">
+                <option value="">Select a reason</option>
+                <optgroup label="Leave / Absence">
+                  <option value="Sick Leave">Sick Leave</option>
+                  <option value="Vacation Leave">Vacation Leave</option>
+                  <option value="Emergency Leave">Emergency Leave</option>
+                  <option value="Maternity / Paternity Leave">Maternity / Paternity Leave</option>
+                  <option value="Special Privilege Leave">Special Privilege Leave</option>
+                  <option value="Forced Leave">Forced Leave</option>
+                </optgroup>
+                <optgroup label="Official Business">
+                  <option value="Official Business / Mission Order">Official Business / Mission Order</option>
+                  <option value="Training / Seminar">Training / Seminar</option>
+                  <option value="Detail to Other Unit">Detail to Other Unit</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option value="AWOL">AWOL (Absent Without Official Leave)</option>
+                  <option value="Other">Other (specify in notes)</option>
+                </optgroup>
               </select>
             </div>
 
             <div class="form-group">
               <label for="notes">Notes</label>
-              <textarea
-                class="form-control"
-                id="notes"
-                name="notes"
-                rows="3"
-                placeholder="Additional notes or remarks..."
-              ></textarea>
+              <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Additional notes or remarks..."></textarea>
             </div>
 
             <div class="alert alert-info">
               <i class="fas fa-info-circle"></i>
-              <strong>Note:</strong> Manual attendance entries are automatically
-              approved and marked as non-auto-captured.
+              <strong>Note:</strong> Manual attendance entries are automatically approved and marked as non-auto-captured.
             </div>
 
             <div class="form-group mb-0">
-              <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> Submit Attendance
-              </button>
-              <a
-                href="{{ url_for('attendance.index') }}"
-                class="btn btn-secondary"
-              >
-                <i class="fas fa-times"></i> Cancel
-              </a>
+              <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Submit Attendance</button>
+              <a href="{{ url_for('attendance.index') }}" class="btn btn-secondary"> <i class="fas fa-times"></i> Cancel </a>
             </div>
           </form>
         </div>
@@ -153,6 +128,26 @@
         }
       }
     });
+
+    // Show/hide reason dropdown based on status
+    const statusSelect = document.getElementById("status");
+    const reasonGroup = document.getElementById("reasonGroup");
+    const reasonSelect = document.getElementById("reason");
+
+    function toggleReasonGroup() {
+      const val = statusSelect.value;
+      const show = val === "ON_LEAVE" || val === "ABSENT";
+      reasonGroup.style.display = show ? "block" : "none";
+      if (show) {
+        reasonSelect.setAttribute("required", "required");
+      } else {
+        reasonSelect.removeAttribute("required");
+        reasonSelect.value = "";
+      }
+    }
+
+    statusSelect.addEventListener("change", toggleReasonGroup);
+    toggleReasonGroup(); // run on page load in case of form re-render
   });
 </script>
 {% endblock %}

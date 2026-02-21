@@ -39,26 +39,7 @@ Attendance System{% endblock %} {% block content %}
             ></canvas>
           </div>
 
-          <!-- Liveness progress indicator -->
-          <div id="livenessProgress" class="mt-3" style="display: none">
-            <div class="progress" style="height: 25px">
-              <div
-                id="livenessProgressBar"
-                class="progress-bar progress-bar-striped progress-bar-animated bg-info"
-                role="progressbar"
-                style="width: 0%"
-                aria-valuenow="0"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                Capturing frames...
-              </div>
-            </div>
-            <small class="text-muted mt-2 d-block">
-              <i class="fas fa-info-circle me-1"></i>Please look at the camera
-              and blink naturally
-            </small>
-          </div>
+
 
           <div class="mt-3">
             <button id="captureBtn" class="btn btn-bfp btn-lg">
@@ -86,37 +67,7 @@ Attendance System{% endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Enhanced Liveness Info Card -->
-    <div class="card mt-3">
-      <div class="card-header bg-info text-white">
-        <h6 class="m-0">
-          <i class="fas fa-shield-alt me-2"></i>Enhanced Security
-        </h6>
-      </div>
-      <div class="card-body">
-        <p class="mb-2">
-          <strong>This system uses advanced anti-spoofing detection:</strong>
-        </p>
-        <ul class="mb-0">
-          <li>
-            <i class="fas fa-eye text-primary me-2"></i>Blink detection -
-            Natural blinking is required
-          </li>
-          <li>
-            <i class="fas fa-head-side text-primary me-2"></i>Head movement
-            analysis - Slight natural movement expected
-          </li>
-          <li>
-            <i class="fas fa-video text-primary me-2"></i>Motion analysis -
-            Detects static photos/screens
-          </li>
-          <li>
-            <i class="fas fa-image text-primary me-2"></i>Texture analysis -
-            Identifies printed photos
-          </li>
-        </ul>
-      </div>
-    </div>
+
   </div>
 </div>
 
@@ -180,9 +131,7 @@ Attendance System{% endblock %} {% block content %}
   const CAPTURE_BUTTON_DEFAULT_HTML =
     '<i class="fas fa-camera me-2"></i>Capture Attendance';
 
-  // Enhanced liveness configuration
-  const FRAME_COUNT = 12; // Number of frames to capture for liveness detection
-  const FRAME_INTERVAL = 150; // Milliseconds between frames (captures ~2 seconds of video)
+
 
   function clearCooldownTimer() {
     if (cooldownTimer) {
@@ -299,7 +248,6 @@ Attendance System{% endblock %} {% block content %}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
                 Camera ready. Position your face in the frame and click "Capture Attendance".
-                <br><small class="mt-2 d-block"><strong>Note:</strong> Enhanced liveness detection will capture multiple frames - please blink naturally and keep slight movement.</small>
             </div>
         `;
     } catch (error) {
@@ -367,49 +315,18 @@ Attendance System{% endblock %} {% block content %}
 
   function captureImage() {
     ctx.drawImage(video, 0, 0, 640, 480);
-    return canvas.toDataURL("image/jpeg", 0.8);
+    return canvas.toDataURL("image/jpeg", 0.9);
   }
 
-  // Capture multiple frames for enhanced liveness detection
-  async function captureMultipleFrames() {
-    const frames = [];
-    const progressBar = document.getElementById("livenessProgressBar");
-    const progressContainer = document.getElementById("livenessProgress");
-
-    progressContainer.style.display = "block";
-
-    for (let i = 0; i < FRAME_COUNT; i++) {
-      frames.push(captureImage());
-
-      // Update progress bar
-      const progress = ((i + 1) / FRAME_COUNT) * 100;
-      progressBar.style.width = `${progress}%`;
-      progressBar.setAttribute("aria-valuenow", progress);
-      progressBar.textContent = `Capturing frames... ${i + 1}/${FRAME_COUNT}`;
-
-      // Wait before capturing next frame
-      if (i < FRAME_COUNT - 1) {
-        await new Promise((resolve) => setTimeout(resolve, FRAME_INTERVAL));
-      }
-    }
-
-    progressBar.textContent = "Processing...";
-    progressBar.classList.remove("bg-info");
-    progressBar.classList.add("bg-success");
-
-    return frames;
-  }
-
-  async function processAttendance(frames) {
+  async function processAttendance(main_image) {
     try {
       clearCooldownTimer();
       setProcessingState(true);
 
       const controller = new AbortController();
-      const requestTimeoutMs = 90000; // Enhanced liveness + recognition can take time on CPU.
+      const requestTimeoutMs = 30000;
       const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
-      // Use enhanced endpoint with multiple frames
       const response = await fetch(
         '{{ url_for("api.capture_attendance_enhanced") }}',
         {
@@ -417,10 +334,7 @@ Attendance System{% endblock %} {% block content %}
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            frames: frames,
-            main_image: frames[frames.length - 1], // Use last frame as main image
-          }),
+          body: JSON.stringify({ main_image }),
           signal: controller.signal,
         }
       );
@@ -448,7 +362,7 @@ Attendance System{% endblock %} {% block content %}
         );
       }
 
-      // Hide progress bar
+      if// Hide progress bar
       document.getElementById("livenessProgress").style.display = "none";
       const progressBar = document.getElementById("livenessProgressBar");
       progressBar.style.width = "0%";

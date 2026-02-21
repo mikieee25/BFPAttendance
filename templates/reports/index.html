@@ -1,11 +1,8 @@
-{% extends "base.html" %} {% block title %}Reports - BFP Sorsogon Attendance
-System{% endblock %} {% block content %}
+{% extends "base.html" %} {% block title %}Reports - BFP Sorsogon Attendance System{% endblock %} {% block content %}
 <div class="row">
   <div class="col-12">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="page-title">
-        <i class="fas fa-file-alt me-2"></i>Attendance Reports
-      </h1>
+      <h1 class="page-title"><i class="fas fa-file-alt me-2"></i>Attendance Reports</h1>
     </div>
   </div>
 </div>
@@ -17,14 +14,8 @@ System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
-            >
-              Total Personnel
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ stats.total_personnel }}
-            </div>
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Personnel</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_personnel }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -39,14 +30,8 @@ System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-success text-uppercase mb-1"
-            >
-              Today Present
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ stats.today_present }}
-            </div>
+            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Today Present</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.today_present }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -61,14 +46,8 @@ System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-warning text-uppercase mb-1"
-            >
-              Today Late
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ stats.today_late }}
-            </div>
+            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Today Late</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.today_late }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-clock fa-2x text-gray-300"></i>
@@ -83,14 +62,8 @@ System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-danger text-uppercase mb-1"
-            >
-              Today Absent
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ stats.today_absent }}
-            </div>
+            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Today Absent</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.today_absent }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-times-circle fa-2x text-gray-300"></i>
@@ -106,39 +79,21 @@ System{% endblock %} {% block content %}
   <div class="col-12">
     <div class="card shadow">
       <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-filter me-2"></i>Generate Attendance Report
-        </h6>
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-filter me-2"></i>Generate Table Report</h6>
       </div>
       <div class="card-body">
-        <form
-          id="reportFilterForm"
-          method="GET"
-          action="{{ url_for('reports.attendance_summary') }}"
-        >
+        <form id="reportFilterForm" method="GET" action="{{ url_for('reports.attendance_summary') }}">
           <div class="row">
             <div class="col-md-3 mb-3">
               <label class="form-label">Quick Filter</label>
               <div class="d-grid gap-2">
-                <button
-                  type="button"
-                  class="btn btn-outline-primary"
-                  onclick="setDateRange('week')"
-                >
+                <button type="button" class="btn btn-outline-primary" onclick="setDateRange('week')">
                   <i class="fas fa-calendar-week me-2"></i>This Week
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-success"
-                  onclick="setDateRange('month')"
-                >
+                <button type="button" class="btn btn-outline-success" onclick="setDateRange('month')">
                   <i class="fas fa-calendar-alt me-2"></i>This Month
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-info"
-                  onclick="setDateRange('year')"
-                >
+                <button type="button" class="btn btn-outline-info" onclick="setDateRange('year')">
                   <i class="fas fa-calendar me-2"></i>This Year
                 </button>
               </div>
@@ -147,26 +102,12 @@ System{% endblock %} {% block content %}
               <label class="form-label">Custom Date Range</label>
               <div class="row">
                 <div class="col-6">
-                  <label for="start_date" class="form-label text-muted small"
-                    >From</label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    id="start_date"
-                    name="start_date"
-                  />
+                  <label for="start_date" class="form-label text-muted small">From</label>
+                  <input type="date" class="form-control" id="start_date" name="start_date" />
                 </div>
                 <div class="col-6">
-                  <label for="end_date" class="form-label text-muted small"
-                    >To</label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    id="end_date"
-                    name="end_date"
-                  />
+                  <label for="end_date" class="form-label text-muted small">To</label>
+                  <input type="date" class="form-control" id="end_date" name="end_date" />
                 </div>
               </div>
             </div>
@@ -176,16 +117,12 @@ System{% endblock %} {% block content %}
               <select class="form-control" id="station_id" name="station_id">
                 <option value="">All Stations</option>
                 {% for station in stations %}
-                <option value="{{ station.id }}">
-                  {{ station.station_name }}
-                </option>
+                <option value="{{ station.id }}">{{ station.station_name }}</option>
                 {% endfor %}
               </select>
               {% endif %}
               <div class="d-grid gap-2 mt-3">
-                <button type="submit" class="btn btn-primary">
-                  <i class="fas fa-search me-2"></i>Generate Report
-                </button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search me-2"></i>Generate Report</button>
               </div>
             </div>
           </div>
@@ -200,26 +137,19 @@ System{% endblock %} {% block content %}
   <div class="col-lg-6 mb-4">
     <div class="card shadow h-100">
       <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-table me-2"></i>Available Reports
-        </h6>
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-table me-2"></i>Available Reports</h6>
       </div>
       <div class="card-body">
-        <p class="text-muted">
-          Generate detailed attendance reports with various filters.
-        </p>
+        <p class="text-muted">Open table-based reports for official submission and review.</p>
         <div class="d-grid gap-2">
-          <a
-            href="{{ url_for('reports.attendance_summary') }}"
-            class="btn btn-primary"
-          >
+          <a href="{{ url_for('reports.attendance_summary') }}" class="btn btn-primary">
             <i class="fas fa-list-alt me-2"></i>Attendance Summary Report
           </a>
+          <a href="{{ url_for('reports.monthly_trends') }}" class="btn btn-outline-primary">
+            <i class="fas fa-calendar-alt me-2"></i>Monthly Attendance Report
+          </a>
           {% if current_user.is_admin %}
-          <a
-            href="{{ url_for('reports.station_comparison') }}"
-            class="btn btn-success"
-          >
+          <a href="{{ url_for('reports.station_comparison') }}" class="btn btn-success">
             <i class="fas fa-building me-2"></i>Station Comparison Report
           </a>
           {% endif %}
@@ -231,29 +161,18 @@ System{% endblock %} {% block content %}
   <div class="col-lg-6 mb-4">
     <div class="card shadow h-100">
       <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-download me-2"></i>Export Options
-        </h6>
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-download me-2"></i>Export Options</h6>
       </div>
       <div class="card-body">
-        <p class="text-muted">Export attendance data in various formats.</p>
+        <p class="text-muted">Export is optional after validating data in table reports.</p>
         <div class="d-grid gap-2">
-          <a
-            href="{{ url_for('reports.export_attendance', format='xlsx') }}"
-            class="btn btn-success"
-          >
+          <a href="{{ url_for('reports.export_attendance', format='xlsx') }}" class="btn btn-success">
             <i class="fas fa-file-excel me-2"></i>Export to Excel
           </a>
-          <a
-            href="{{ url_for('reports.export_attendance', format='pdf') }}"
-            class="btn btn-danger"
-          >
+          <a href="{{ url_for('reports.export_attendance', format='pdf') }}" class="btn btn-danger">
             <i class="fas fa-file-pdf me-2"></i>Export to PDF
           </a>
-          <a
-            href="{{ url_for('reports.export_attendance', format='csv') }}"
-            class="btn btn-info"
-          >
+          <a href="{{ url_for('reports.export_attendance', format='csv') }}" class="btn btn-info">
             <i class="fas fa-file-csv me-2"></i>Export to CSV
           </a>
         </div>
@@ -284,13 +203,8 @@ System{% endblock %} {% block content %}
     }
 
     // Format dates as YYYY-MM-DD
-    document.getElementById("start_date").value = startDate
-      .toISOString()
-      .split("T")[0];
-    document.getElementById("end_date").value = new Date()
-      .toISOString()
-      .split("T")[0];
+    document.getElementById("start_date").value = startDate.toISOString().split("T")[0];
+    document.getElementById("end_date").value = new Date().toISOString().split("T")[0];
   }
 </script>
 {% endblock %}
-

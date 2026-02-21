@@ -1,18 +1,12 @@
-{% extends "base.html" %} {% block title %}Manage Stations - BFP Sorsogon
-Attendance System{% endblock %} {% block content %}
+{% extends "base.html" %} {% block title %}Manage Stations - BFP Sorsogon Attendance System{% endblock %} {% block content %}
 <div class="row">
   <div class="col-12">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="page-title">
-        <i class="fas fa-building me-2"></i>Manage Stations
-      </h1>
-      <div>
-        <a href="{{ url_for('personnel.add') }}" class="btn btn-primary">
-          <i class="fas fa-plus me-2"></i>Add New Personnel
-        </a>
-        <button class="btn btn-success" onclick="exportStations()">
-          <i class="fas fa-download me-2"></i>Export
-        </button>
+      <h1 class="page-title"><i class="fas fa-building me-2"></i>Manage Stations</h1>
+      <div class="d-flex gap-2">
+        <button class="btn btn-warning" onclick="showCreateKioskModal()"><i class="fas fa-desktop me-2"></i>Create Kiosk</button>
+        <a href="{{ url_for('personnel.add') }}" class="btn btn-primary"> <i class="fas fa-plus me-2"></i>Add New Personnel </a>
+        <button class="btn btn-success" onclick="exportStations()"><i class="fas fa-download me-2"></i>Export</button>
       </div>
     </div>
   </div>
@@ -25,14 +19,8 @@ Attendance System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
-            >
-              Total Stations
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ station_stats.total_stations }}
-            </div>
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Stations</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ station_stats.total_stations }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-building fa-2x text-gray-300"></i>
@@ -47,14 +35,8 @@ Attendance System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-success text-uppercase mb-1"
-            >
-              Active Stations
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ station_stats.active_stations }}
-            </div>
+            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active Stations</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ station_stats.active_stations }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -69,14 +51,8 @@ Attendance System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div
-              class="text-xs font-weight-bold text-warning text-uppercase mb-1"
-            >
-              Total Personnel
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ station_stats.total_personnel }}
-            </div>
+            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Total Personnel</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ station_stats.total_personnel }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -91,12 +67,8 @@ Attendance System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-              New This Month
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">
-              {{ station_stats.new_this_month }}
-            </div>
+            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">New This Month</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ station_stats.new_this_month }}</div>
           </div>
           <div class="col-auto">
             <i class="fas fa-plus fa-2x text-gray-300"></i>
@@ -114,22 +86,16 @@ Attendance System{% endblock %} {% block content %}
       <div class="card-body">
         <div class="row align-items-end">
           <div class="col-md-3">
-            <label for="filterStationType" class="form-label"
-              >Filter by Station Type:</label
-            >
+            <label for="filterStationType" class="form-label">Filter by Station Type:</label>
             <select class="form-select" id="filterStationType">
               <option value="">All Station Types</option>
               {% for station_type in station_types %}
-              <option value="{{ station_type.id }}">
-                {{ station_type.name }}
-              </option>
+              <option value="{{ station_type.id }}">{{ station_type.name }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-md-3">
-            <label for="filterStatus" class="form-label"
-              >Filter by Status:</label
-            >
+            <label for="filterStatus" class="form-label">Filter by Status:</label>
             <select class="form-select" id="filterStatus">
               <option value="">All Status</option>
               <option value="Active">Active</option>
@@ -137,9 +103,7 @@ Attendance System{% endblock %} {% block content %}
             </select>
           </div>
           <div class="col-md-3">
-            <label for="filterPersonnel" class="form-label"
-              >Filter by Personnel Count:</label
-            >
+            <label for="filterPersonnel" class="form-label">Filter by Personnel Count:</label>
             <select class="form-select" id="filterPersonnel">
               <option value="">All Stations</option>
               <option value="0">No Personnel</option>
@@ -149,11 +113,7 @@ Attendance System{% endblock %} {% block content %}
             </select>
           </div>
           <div class="col-md-3">
-            <button
-              type="button"
-              class="btn btn-outline-secondary w-100"
-              onclick="clearFilters()"
-            >
+            <button type="button" class="btn btn-outline-secondary w-100" onclick="clearFilters()">
               <i class="fas fa-times me-2"></i>Clear Filters
             </button>
           </div>
@@ -168,18 +128,11 @@ Attendance System{% endblock %} {% block content %}
   <div class="col-12">
     <div class="card shadow mb-4">
       <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-list me-2"></i>Station List
-        </h6>
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-list me-2"></i>Station List</h6>
       </div>
       <div class="card-body">
         <div class="table-responsive">
-          <table
-            class="table table-bordered"
-            id="stationsTable"
-            width="100%"
-            cellspacing="0"
-          >
+          <table class="table table-bordered" id="stationsTable" width="100%" cellspacing="0">
             <thead>
               <tr>
                 <th>Station Logo</th>
@@ -212,40 +165,23 @@ Attendance System{% endblock %} {% block content %}
                 <td>{{ station.station_type.value }}</td>
                 <td>{{ station.email }}</td>
                 <td>
-                  <span class="badge bg-info">
-                    {{ station.personnel_count or 0 }} personnel
-                  </span>
+                  <span class="badge bg-info"> {{ station.personnel_count or 0 }} personnel </span>
                 </td>
                 <td>
                   <span class="badge bg-{{ 'success' if station.is_active else 'secondary' }}">
                     {{ 'Active' if station.is_active else 'Inactive' }}
                   </span>
                 </td>
-                <td>
-                  {{ station.date_created.strftime('%m/%d/%Y') if
-                  station.date_created else '-' }}
-                </td>
+                <td>{{ station.date_created.strftime('%m/%d/%Y') if station.date_created else '-' }}</td>
                 <td>
                   <div class="btn-group" role="group">
-                    <button
-                      class="btn btn-sm btn-outline-primary"
-                      onclick="viewStation({{ station.id }})"
-                      title="View Details"
-                    >
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewStation({{ station.id }})" title="View Details">
                       <i class="fas fa-eye"></i>
                     </button>
-                    <button
-                      class="btn btn-sm btn-outline-success"
-                      onclick="editStation({{ station.id }})"
-                      title="Edit Station"
-                    >
+                    <button class="btn btn-sm btn-outline-success" onclick="editStation({{ station.id }})" title="Edit Station">
                       <i class="fas fa-edit"></i>
                     </button>
-                    <button
-                      class="btn btn-sm btn-outline-info"
-                      onclick="managePersonnel({{ station.id }})"
-                      title="Manage Personnel"
-                    >
+                    <button class="btn btn-sm btn-outline-info" onclick="managePersonnel({{ station.id }})" title="Manage Personnel">
                       <i class="fas fa-users"></i>
                     </button>
                     <button
@@ -267,98 +203,104 @@ Attendance System{% endblock %} {% block content %}
   </div>
 </div>
 
+<!-- Create Kiosk Modal -->
+<div class="modal fade" id="createKioskModal" tabindex="-1" role="dialog" aria-labelledby="createKioskModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="createKioskModalLabel"><i class="fas fa-desktop me-2"></i>Create Kiosk Account</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Kiosk accounts are restricted to the attendance kiosk view only and cannot access any other part of the system.
+        </p>
+        <form id="createKioskForm">
+          <div class="mb-3">
+            <label for="kioskUsername" class="form-label">Username <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="kioskUsername" placeholder="e.g. kiosk_central" required />
+          </div>
+          <div class="mb-3">
+            <label for="kioskEmail" class="form-label">Contact Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" id="kioskEmail" placeholder="e.g. kiosk@bfp.gov.ph" required />
+          </div>
+          <div class="mb-3">
+            <label for="kioskStationType" class="form-label">Station <span class="text-danger">*</span></label>
+            <select class="form-select" id="kioskStationType" required>
+              <option value="" disabled selected>Select a station</option>
+              {% for station_type in station_types %}
+              <option value="{{ station_type.id }}">{{ station_type.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="kioskPassword" class="form-label">Password <span class="text-danger">*</span></label>
+            <input type="password" class="form-control" id="kioskPassword" placeholder="Enter a strong password" required />
+          </div>
+          <div class="mb-3">
+            <label for="kioskConfirmPassword" class="form-label">Confirm Password <span class="text-danger">*</span></label>
+            <input type="password" class="form-control" id="kioskConfirmPassword" placeholder="Re-enter the password" required />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" onclick="saveKiosk()"><i class="fas fa-desktop me-2"></i>Create Kiosk</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Station Details Modal -->
-<div
-  class="modal fade"
-  id="stationModal"
-  tabindex="-1"
-  role="dialog"
-  aria-labelledby="stationModalLabel"
-  aria-hidden="true"
->
+<div class="modal fade" id="stationModal" tabindex="-1" role="dialog" aria-labelledby="stationModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="stationModalLabel">Station Details</h5>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body" id="stationModalBody">
         <!-- Station details will be loaded here -->
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-          Close
-        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Edit Station Modal -->
-<div
-  class="modal fade"
-  id="editStationModal"
-  tabindex="-1"
-  role="dialog"
-  aria-labelledby="editStationModalLabel"
-  aria-hidden="true"
->
+<div class="modal fade" id="editStationModal" tabindex="-1" role="dialog" aria-labelledby="editStationModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="editStationModalLabel">Edit Station</h5>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <form id="editStationForm">
           <div class="mb-3">
             <label for="editStationName" class="form-label">Station Name</label>
-            <input
-              type="text"
-              class="form-control"
-              id="editStationName"
-              readonly
-            />
+            <input type="text" class="form-control" id="editStationName" readonly />
             <small class="text-muted">Derived from station type.</small>
           </div>
           <div class="mb-3">
-            <label for="editStationEmail" class="form-label"
-              >Contact Email</label
-            >
-            <input
-              type="email"
-              class="form-control"
-              id="editStationEmail"
-              required
-            />
+            <label for="editStationEmail" class="form-label">Contact Email</label>
+            <input type="email" class="form-control" id="editStationEmail" required />
           </div>
           <div class="mb-3">
             <label for="editStationType" class="form-label">Station Type</label>
             <select class="form-select" id="editStationType" required>
               {% for station_type in station_types %}
-              <option value="{{ station_type.id }}">
-                {{ station_type.name }}
-              </option>
+              <option value="{{ station_type.id }}">{{ station_type.name }}</option>
               {% endfor %}
             </select>
           </div>
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" onclick="saveStation()">
-          Save Changes
-        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveStation()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -388,21 +330,15 @@ Attendance System{% endblock %} {% block content %}
           modalBody.innerHTML = `
             <div class="row">
               <div class="col-md-4 text-center">
-                <img src="${
-                  station.profile_picture
-                }" alt="Station" class="img-fluid rounded-circle mb-3" style="max-width: 150px;">
+                <img src="${station.profile_picture}" alt="Station" class="img-fluid rounded-circle mb-3" style="max-width: 150px;">
               </div>
               <div class="col-md-8">
                 <h5>${station.station_name}</h5>
                 <p><strong>Username:</strong> ${station.username}</p>
                 <p><strong>Email:</strong> ${station.email}</p>
                 <p><strong>Station Type:</strong> ${station.station_type}</p>
-                <p><strong>Personnel Count:</strong> ${
-                  station.personnel_count || 0
-                }</p>
-                <p><strong>Created:</strong> ${
-                  station.date_created || "N/A"
-                }</p>
+                <p><strong>Personnel Count:</strong> ${station.personnel_count || 0}</p>
+                <p><strong>Created:</strong> ${station.date_created || "N/A"}</p>
                 <p><strong>Status:</strong> <span class="badge bg-${
                   station.is_active ? "success" : "secondary"
                 }">${station.is_active ? "Active" : "Inactive"}</span></p>
@@ -428,16 +364,11 @@ Attendance System{% endblock %} {% block content %}
       .then((data) => {
         if (data.success) {
           const station = data.station;
-          document.getElementById("editStationName").value =
-            station.station_name;
+          document.getElementById("editStationName").value = station.station_name;
           document.getElementById("editStationEmail").value = station.email;
-          document.getElementById("editStationType").value =
-            station.station_type;
-          document.getElementById("editStationForm").dataset.stationId =
-            stationId;
-          new bootstrap.Modal(
-            document.getElementById("editStationModal")
-          ).show();
+          document.getElementById("editStationType").value = station.station_type;
+          document.getElementById("editStationForm").dataset.stationId = stationId;
+          new bootstrap.Modal(document.getElementById("editStationModal")).show();
         } else {
           showAlert("error", data.error || "Failed to load station details");
         }
@@ -468,9 +399,7 @@ Attendance System{% endblock %} {% block content %}
       .then((data) => {
         if (data.success) {
           showAlert("success", data.message);
-          bootstrap.Modal.getInstance(
-            document.getElementById("editStationModal")
-          ).hide();
+          bootstrap.Modal.getInstance(document.getElementById("editStationModal")).hide();
           setTimeout(() => location.reload(), 1500);
         } else {
           showAlert("error", data.error);
@@ -522,6 +451,59 @@ Attendance System{% endblock %} {% block content %}
 
     const queryString = new URLSearchParams(filters).toString();
     window.open(`/auth/export-stations?${queryString}`, "_blank");
+  }
+
+  // Show Create Kiosk modal
+  function showCreateKioskModal() {
+    document.getElementById("createKioskForm").reset();
+    new bootstrap.Modal(document.getElementById("createKioskModal")).show();
+  }
+
+  // Save new kiosk account
+  function saveKiosk() {
+    const username = document.getElementById("kioskUsername").value.trim();
+    const email = document.getElementById("kioskEmail").value.trim();
+    const stationType = document.getElementById("kioskStationType").value;
+    const password = document.getElementById("kioskPassword").value;
+    const confirmPassword = document.getElementById("kioskConfirmPassword").value;
+
+    if (!username || !email || !stationType || !password || !confirmPassword) {
+      showAlert("error", "All fields are required.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showAlert("error", "Passwords do not match.");
+      return;
+    }
+
+    fetch("/auth/create-kiosk", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        email,
+        station_type: stationType,
+        password,
+        confirm_password: confirmPassword,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          showAlert("success", data.message || "Kiosk account created successfully.");
+          bootstrap.Modal.getInstance(document.getElementById("createKioskModal")).hide();
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showAlert("error", data.error || "Failed to create kiosk account.");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showAlert("error", "An error occurred while creating the kiosk account.");
+      });
   }
 
   // Clear filters

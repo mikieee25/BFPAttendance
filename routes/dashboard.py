@@ -40,6 +40,12 @@ def index():
     absent_today = total_personnel - present_today
     late_today = len([a for a in today_attendance if a.status == AttendanceStatus.LATE])
 
+    # Shifting personnel on duty today
+    all_personnel = personnel_query.all()
+    shifting_today = len(
+        [p for p in all_personnel if p.is_shifting and p.is_on_duty(today)]
+    )
+
     # Recent attendance records (last 10)
     recent_attendance = (
         attendance_query.order_by(desc(Attendance.date_created)).limit(10).all()
@@ -53,6 +59,7 @@ def index():
         "present_today": present_today,
         "absent_today": absent_today,
         "late_today": late_today,
+        "shifting_today": shifting_today,
         "recent_attendance": recent_attendance,
         "current_time": current_time,
         "today": today,
@@ -64,7 +71,7 @@ def index():
 @dashboard_bp.route("/api/time")
 @login_required
 def get_current_time():
-    """API endpoint to get current time for the dashboard clock - DEPRECATED: Now using client-side clock"""
+    """API endpoint to get current time - DEPRECATED: Now using client-side clock"""
     current_time = datetime.now()
     return jsonify(
         {
@@ -103,11 +110,17 @@ def get_stats():
     absent_today = total_personnel - present_today
     late_today = len([a for a in today_attendance if a.status == AttendanceStatus.LATE])
 
+    all_personnel = personnel_query.all()
+    shifting_today = len(
+        [p for p in all_personnel if p.is_shifting and p.is_on_duty(today)]
+    )
+
     return jsonify(
         {
             "total_personnel": total_personnel,
             "present_today": present_today,
             "absent_today": absent_today,
             "late_today": late_today,
+            "shifting_today": shifting_today,
         }
     )

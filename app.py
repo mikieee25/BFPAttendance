@@ -111,19 +111,7 @@ def create_app():
         except Exception as exc:
             logger.warning("Model preload failed: %s", exc)
 
-    # Liveness detection settings
-    app.config["LIVENESS_TEXTURE_THRESHOLD"] = (
-        0.75  # Practical security - blocks most photos while allowing live faces
-    )
-    app.config["LIVENESS_REQUIRE_MULTI_FRAME"] = (
-        True  # Require multiple frames for enhanced security
-    )
-    app.config["LIVENESS_MIN_FRAMES"] = 3  # Minimum frames required for liveness
-    app.config["LIVENESS_MIN_FRAME_DIFFERENCE"] = (
-        0.02  # Minimum change between frames to detect motion
-    )
-    app.config["LIVENESS_MIN_MOTION"] = 0.001  # Minimum motion for live detection
-    app.config["LIVENESS_MAX_MOTION"] = 0.15  # Maximum motion (prevent video playback)
+
 
     # Create required directories for file uploads and temporary storage
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -163,6 +151,7 @@ def create_app():
     from routes.attendance import attendance_bp
     from routes.auth import auth_bp
     from routes.dashboard import dashboard_bp
+    from routes.kiosk import kiosk_bp
     from routes.pending import pending_bp
     from routes.personnel import personnel_bp
     from routes.profile import profile_bp
@@ -176,17 +165,34 @@ def create_app():
     app.register_blueprint(pending_bp, url_prefix="/pending")
     app.register_blueprint(profile_bp, url_prefix="/profile")
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(kiosk_bp, url_prefix="/kiosk")
 
     @app.route("/")
     def index():
         """Root route - redirect authenticated users to dashboard, others to login"""
         if current_user.is_authenticated:
+            if getattr(current_user, "is_kiosk", False):
+                return redirect(url_for("kiosk.index"))
             return redirect(url_for("dashboard.index"))
         return redirect(url_for("auth.login"))
 
+    # Allowed endpoints for kiosk accounts — everything else is blocked
+    _KIOSK_ALLOWED_ENDPOINTS = {
+        "auth.logout",
+        "auth.login",
+        "kiosk.index",
+        "kiosk.manual_entry",
+        "kiosk.recent_json",
+        "api.capture_attendance_enhanced",
+        "api.capture_attendance",
+        "static",
+    }
+
     @app.before_request
     def enforce_active_session():
-        """Immediately revoke sessions for deactivated users."""
+        """Immediately revoke sessions for deactivated users.
+        Also restricts kiosk accounts to kiosk-only endpoints.
+        """
         if not current_user.is_authenticated:
             return None
 
@@ -198,6 +204,13 @@ def create_app():
             logout_user()
             flash("Your account is inactive. Please contact an administrator.", "error")
             return redirect(url_for("auth.login"))
+
+        # Kiosk accounts may only access kiosk routes + auth + static
+        if getattr(current_user, "is_kiosk", False):
+            endpoint = request.endpoint or ""
+            if endpoint not in _KIOSK_ALLOWED_ENDPOINTS:
+                return redirect(url_for("kiosk.index"))
+
         return None
 
     # Custom error page handlers
@@ -263,6 +276,7 @@ def create_app():
                     password=generate_password_hash(admin_password),
                     station_type=StationType.CENTRAL,
                     is_admin=True,
+                    is_kiosk=False,
                     must_change_password=True,  # Force password change on first login
                 )
                 db.session.add(admin)

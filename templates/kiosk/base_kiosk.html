@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <title>{% block title %}BFP Attendance Kiosk{% endblock %}</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+    <style>
+      :root {
+        --bfp-red: #cc0000;
+        --bfp-dark: #8b0000;
+        --bfp-light: #fff5f5;
+        --kiosk-bg: #0d1b2a;
+        --kiosk-surface: #1b2e40;
+        --kiosk-card: #243447;
+        --kiosk-border: #2e4460;
+        --kiosk-text: #e8f4fd;
+        --kiosk-muted: #7a9cc0;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: "Inter", sans-serif;
+        background: var(--kiosk-bg);
+        color: var(--kiosk-text);
+        overflow-x: hidden;
+      }
+
+      /* ── Kiosk wrapper ── */
+      .kiosk-wrapper {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Top bar ── */
+      .kiosk-topbar {
+        background: linear-gradient(135deg, var(--bfp-dark) 0%, var(--bfp-red) 100%);
+        padding: 0.75rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+        flex-shrink: 0;
+      }
+
+      .kiosk-topbar .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+      }
+
+      .kiosk-topbar .brand img {
+        height: 48px;
+        width: 48px;
+        object-fit: contain;
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
+      }
+
+      .kiosk-topbar .brand-text h1 {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #fff;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
+      }
+
+      .kiosk-topbar .brand-text p {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin: 0;
+      }
+
+      .kiosk-topbar .kiosk-clock {
+        text-align: right;
+      }
+
+      .kiosk-topbar .kiosk-clock .time-display {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: 0.05em;
+        line-height: 1;
+      }
+
+      .kiosk-topbar .kiosk-clock .date-display {
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin-top: 2px;
+      }
+
+      /* ── Main content area ── */
+      .kiosk-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 1.5rem 2rem;
+        gap: 1.5rem;
+      }
+
+      /* ── Flash messages ── */
+      .kiosk-alerts {
+        flex-shrink: 0;
+      }
+
+      /* ── Cards ── */
+      .kiosk-card {
+        background: var(--kiosk-card);
+        border: 1px solid var(--kiosk-border);
+        border-radius: 1rem;
+        overflow: hidden;
+      }
+
+      .kiosk-card-header {
+        background: var(--kiosk-surface);
+        border-bottom: 1px solid var(--kiosk-border);
+        padding: 0.75rem 1.25rem;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--kiosk-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .kiosk-card-body {
+        padding: 1.25rem;
+      }
+
+      /* ── Action buttons ── */
+      .kiosk-action-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        border: none;
+        border-radius: 1.25rem;
+        font-family: "Inter", sans-serif;
+        font-weight: 800;
+        font-size: 1.35rem;
+        color: #fff;
+        cursor: pointer;
+        transition:
+          transform 0.12s ease,
+          box-shadow 0.12s ease,
+          filter 0.12s ease;
+        padding: 2rem 1.5rem;
+        width: 100%;
+        min-height: 160px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .kiosk-action-btn i {
+        font-size: 2.5rem;
+      }
+
+      .kiosk-action-btn:active {
+        transform: scale(0.96);
+        filter: brightness(0.9);
+      }
+
+      .kiosk-action-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      }
+
+      .kiosk-action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .btn-time-in {
+        background: linear-gradient(135deg, #1a7a4a 0%, #25a961 100%);
+      }
+
+      .btn-time-out {
+        background: linear-gradient(135deg, #1a5a99 0%, #2577cc 100%);
+      }
+
+      .btn-manual {
+        background: linear-gradient(135deg, #5a4a8a 0%, #7c68b5 100%);
+        font-size: 1rem;
+        min-height: 80px;
+        padding: 1rem 1.5rem;
+      }
+
+      /* ── Countdown bar ── */
+      .kiosk-countdown-bar {
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.15);
+        overflow: hidden;
+        margin-top: 0.5rem;
+      }
+
+      .kiosk-countdown-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.1s linear;
+      }
+
+      /* ── Camera section ── */
+      #kioskVideo {
+        width: 100%;
+        max-width: 520px;
+        border-radius: 1rem;
+        border: 3px solid var(--kiosk-border);
+        display: block;
+        margin: 0 auto;
+        transform: scaleX(-1);
+        background: #000;
+      }
+
+      #kioskCanvas {
+        display: none;
+      }
+
+      /* ── Countdown overlay ── */
+      .countdown-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 5rem;
+        font-weight: 900;
+        color: #fff;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+        pointer-events: none;
+        z-index: 10;
+        transition: opacity 0.2s;
+      }
+
+      /* ── Recent attendance list ── */
+      .recent-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.6rem;
+        background: var(--kiosk-surface);
+        border: 1px solid var(--kiosk-border);
+        transition: background 0.15s;
+      }
+
+      .recent-item:hover {
+        background: var(--kiosk-border);
+      }
+
+      .recent-item .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 2px solid var(--kiosk-border);
+      }
+
+      .recent-item .info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .recent-item .info .name {
+        font-weight: 700;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--kiosk-text);
+      }
+
+      .recent-item .info .meta {
+        font-size: 0.75rem;
+        color: var(--kiosk-muted);
+      }
+
+      .recent-item .badge-time {
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+
+      /* ── Modal overrides for dark kiosk theme ── */
+      .kiosk-modal .modal-content {
+        background: var(--kiosk-card);
+        border: 1px solid var(--kiosk-border);
+        color: var(--kiosk-text);
+        border-radius: 1rem;
+      }
+
+      .kiosk-modal .modal-header {
+        background: var(--kiosk-surface);
+        border-bottom: 1px solid var(--kiosk-border);
+        border-radius: 1rem 1rem 0 0;
+      }
+
+      .kiosk-modal .modal-header .btn-close {
+        filter: invert(1);
+      }
+
+      .kiosk-modal .modal-footer {
+        background: var(--kiosk-surface);
+        border-top: 1px solid var(--kiosk-border);
+        border-radius: 0 0 1rem 1rem;
+      }
+
+      .kiosk-modal .form-control,
+      .kiosk-modal .form-select {
+        background: var(--kiosk-surface);
+        border-color: var(--kiosk-border);
+        color: var(--kiosk-text);
+      }
+
+      .kiosk-modal .form-control:focus,
+      .kiosk-modal .form-select:focus {
+        background: var(--kiosk-surface);
+        border-color: var(--bfp-red);
+        color: var(--kiosk-text);
+        box-shadow: 0 0 0 3px rgba(204, 0, 0, 0.2);
+      }
+
+      .kiosk-modal .form-label {
+        color: var(--kiosk-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+      }
+
+      .kiosk-modal .form-control option,
+      .kiosk-modal .form-select option {
+        background: var(--kiosk-surface);
+        color: var(--kiosk-text);
+      }
+
+      /* ── Result card (shown after capture) ── */
+      .capture-result {
+        border-radius: 1rem;
+        padding: 1.5rem;
+        text-align: center;
+        animation: fadeSlideIn 0.3s ease;
+      }
+
+      .capture-result.success {
+        background: linear-gradient(135deg, rgba(25, 135, 84, 0.2), rgba(25, 135, 84, 0.05));
+        border: 1px solid rgba(25, 135, 84, 0.4);
+      }
+
+      .capture-result.error {
+        background: linear-gradient(135deg, rgba(220, 53, 69, 0.2), rgba(220, 53, 69, 0.05));
+        border: 1px solid rgba(220, 53, 69, 0.4);
+      }
+
+      @keyframes fadeSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ── Progress / loading ── */
+      .kiosk-spinner {
+        width: 48px;
+        height: 48px;
+        border: 5px solid rgba(255, 255, 255, 0.15);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        margin: 0 auto;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Scrollbar styling ── */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--kiosk-bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--kiosk-border);
+        border-radius: 3px;
+      }
+
+      /* ── Responsive tweaks ── */
+      @media (max-width: 768px) {
+        .kiosk-topbar {
+          padding: 0.6rem 1rem;
+        }
+        .kiosk-topbar .kiosk-clock .time-display {
+          font-size: 1.3rem;
+        }
+        .kiosk-main {
+          padding: 1rem;
+        }
+        .kiosk-action-btn {
+          font-size: 1.1rem;
+          min-height: 130px;
+        }
+        .kiosk-action-btn i {
+          font-size: 2rem;
+        }
+      }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+  </head>
+
+  <body>
+    <div class="kiosk-wrapper">
+      <!-- Top Bar -->
+      <header class="kiosk-topbar">
+        <div class="brand">
+          <img src="{{ url_for('static', filename='images/bfp-logo.png') }}" alt="BFP Logo" />
+          <div class="brand-text">
+            <h1>BFP Sorsogon</h1>
+            <p>Attendance Kiosk</p>
+          </div>
+        </div>
+        <div class="kiosk-clock">
+          <div class="time-display" id="kioskTime">--:--:--</div>
+          <div class="date-display" id="kioskDate">Loading…</div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="kiosk-main">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %}
+        <div class="kiosk-alerts">
+          {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %} {% endwith %} {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+      crossorigin="anonymous"
+    ></script>
+    <!-- jQuery -->
+    <script
+      src="https://code.jquery.com/jquery-3.7.1.min.js"
+      integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      // ── CSRF token helper ──
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+
+      // ── Live clock ──
+      function updateKioskClock() {
+        const now = new Date();
+        const timeEl = document.getElementById("kioskTime");
+        const dateEl = document.getElementById("kioskDate");
+
+        if (timeEl) {
+          timeEl.textContent = now.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          });
+        }
+        if (dateEl) {
+          dateEl.textContent = now.toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+        }
+      }
+
+      updateKioskClock();
+      setInterval(updateKioskClock, 1000);
+    </script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>
